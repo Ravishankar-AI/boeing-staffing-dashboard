@@ -1,0 +1,83 @@
+// Boeing staffing dashboard schema.
+//
+// Lives in the same Railway Postgres database as the Objectways Data catalog,
+// but in its own Postgres schema ("staffing") so the two apps' Prisma
+// migrations never see — or try to drop — each other's tables. Select it by
+// appending `?schema=staffing` to DATABASE_URL (see .env.example).
+//
+// Fields documented as enums are plain Strings, matching the catalog app's
+// convention; allowed values are enforced in src/lib/staffing.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  // "admin" | "recruiter" | "client"
+  role      String
+  // Display only, e.g. "Objectways" or "Boeing".
+  company   String
+  createdAt DateTime @default(now())
+}
+
+// One Boeing request/change order (a tab in the old TOR 6131 workbook),
+// owned by a Boeing point of contact.
+model Engagement {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  boeingPoc String
+  createdAt DateTime   @default(now())
+  positions Position[]
+}
+
+model Position {
+  id            String       @id @default(cuid())
+  engagement    Engagement   @relation(fields: [engagementId], references: [id])
+  engagementId  String
+  title         String
+  // "US" | "India"
+  location      String
+  required      Int
+  filled        Int          @default(0)
+  // Boeing-side reviewer / hiring manager for this role.
+  hiringManager String?
+  openedAt      DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  submissions   Submission[]
+}
+
+// One resume sent to Boeing for one position. The same person can be
+// submitted to more than one position/engagement, so this is keyed by
+// submission, not by candidate.
+model Submission {
+  id              String    @id @default(cuid())
+  position        Position  @relation(fields: [positionId], references: [id])
+  positionId      String
+  candidateName   String
+  location        String
+  sentAt          DateTime
+  // "submitted" | "screen_rejected" | "shortlisted" | "interview_scheduled"
+  // | "awaiting_feedback" | "on_hold" | "interview_rejected" | "selected"
+  // | "onboarded" | "withdrawn"
+  stage           String    @default("submitted")
+  screeningNotes  String?
+  interviewer     String?
+  interviewAt     DateTime?
+  feedback        String?
+  onboardingNotes String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([positionId])
+  @@index([stage])
+}
