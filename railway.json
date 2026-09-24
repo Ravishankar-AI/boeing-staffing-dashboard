@@ -5,7 +5,9 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "preDeployCommand": ["npx prisma migrate deploy"],
+    "preDeployCommand": [
+      "npx prisma migrate deploy && npm run db:seed:if-empty"
+    ],
     "startCommand": "npm start",
     "healthcheckPath": "/sign-in",
     "restartPolicyType": "ON_FAILURE"

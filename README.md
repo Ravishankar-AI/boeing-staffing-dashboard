@@ -52,10 +52,14 @@ Neither app's `prisma migrate` can see or drop the other's tables.
    (use the name of your Postgres service in place of `Postgres` if it's different).
 3. Deploy. `railway.json` builds with `npm run build`. Before each release it
    runs `prisma migrate deploy`, which creates the `staffing` schema and its
-   tables on the first deploy. It then starts `next start` on Railway's `$PORT`.
-4. Seed it once, using either option:
-   - From your machine: `DATABASE_URL="<public Postgres URL>?schema=staffing" npm run db:seed`
-   - Or paste `prisma/manual-seed.sql` into **Postgres → Data → Query**.
+   tables on the first deploy. It then runs `npm run db:seed:if-empty`, which
+   loads the workbook data only while the tables are empty, so later deploys
+   never overwrite recruiters' updates. Finally it starts `next start` on
+   Railway's `$PORT`.
+4. To reset the data back to the workbook, run the full seed from your machine:
+   `DATABASE_URL="<public Postgres URL>?schema=staffing" npm run db:seed`.
+   This wipes the staffing tables first. Or truncate the tables and paste
+   `prisma/manual-seed.sql` into **Postgres → Data → Query**.
 5. **Settings → Networking → Generate Domain** to get a URL to share.
 
 ## Local development

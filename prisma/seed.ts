@@ -152,6 +152,15 @@ const USERS = [
 ];
 
 async function main() {
+  // `--if-empty` runs on every Railway deploy (see railway.json): it seeds a
+  // fresh database once and never touches one that already has data, so
+  // recruiters' updates survive redeploys. Without the flag this is a full
+  // reset back to the workbook contents.
+  if (process.argv.includes("--if-empty") && (await prisma.engagement.count()) > 0) {
+    console.log("Staffing data already present; skipping seed.");
+    return;
+  }
+
   console.log("Seeding staffing data...");
 
   await prisma.submission.deleteMany();
