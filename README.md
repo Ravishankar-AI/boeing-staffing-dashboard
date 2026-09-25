@@ -1,4 +1,6 @@
-# Boeing Staffing Dashboard
+# Objectways Talent
+
+Client hiring dashboard at https://talent.objectways.com. Boeing is the first client.
 
 One shared view of the Boeing staffing program. It replaces the
 "TOR 6131 – Objectways Hiring" workbook. Boeing, Objectways recruiters, and
@@ -74,10 +76,23 @@ npm run dev
 
 Visit `/sign-in` and pick a persona.
 
-## Before real Boeing users log in
+## Sign-in
 
-Sign-in is a **mock persona picker** (`src/lib/auth.ts`). It trusts a cookie
-and has no passwords, so it is fine for a demo URL but not for production
-data. Replace it with real SSO (Auth.js, or Clerk / Microsoft Entra, which
-Boeing will likely want) and keep the `Session` shape. The pages only read
-`role`.
+Each group has one shared password, and the password decides the role
+(`src/lib/auth.ts`). These are set as variables on the Railway service:
+
+| Variable | Who |
+| --- | --- |
+| `CLIENT_PASSWORD` | Boeing hiring team (read-only) |
+| `RECRUITER_PASSWORD` | Objectways recruiters |
+| `ADMIN_PASSWORD` | Objectways leadership |
+| `SESSION_SECRET` | Signs the login cookie (32+ random characters) |
+
+To rotate a password, change the variable and redeploy. Changing
+`SESSION_SECRET` signs everyone out. A group whose password is unset can't
+sign in.
+
+These are shared per group, so there is no per-person audit trail or
+revocation. Move to individual accounts or SSO (Auth.js, Clerk, or Microsoft
+Entra, which Boeing will likely want) before wider rollout, and keep the
+`Session` shape: the pages only read `role`.

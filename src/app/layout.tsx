@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "Boeing Staffing — Objectways",
+  title: "Objectways Talent",
   description: "Shared view of Boeing openings, resumes sent, and interview status for Boeing, Objectways recruiters, and leadership.",
 };
 
@@ -16,7 +16,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SiteHeader session={session} />
         <main className="flex-1">{children}</main>
         <footer className="border-t border-line py-6 text-center text-[0.68rem] uppercase tracking-wider text-ink-faint">
-          Objectways · Boeing staffing program
+          Objectways Talent · Client hiring dashboard
         </footer>
       </body>
     </html>

@@ -5,7 +5,7 @@ import { createPosition, updatePosition } from "@/app/actions";
 import { OpenClosedPill } from "@/components/stage-pill";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Openings — Boeing Staffing" };
+export const metadata = { title: "Openings — Objectways Talent" };
 
 const field = "rounded-md border border-line bg-card px-2 py-1.5 font-mono text-[0.78rem] text-ink focus:border-signal focus:outline-none";
 

@@ -8,7 +8,7 @@ import { StagePill } from "@/components/stage-pill";
 import { StageSelect } from "@/components/stage-select";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Candidates — Boeing Staffing" };
+export const metadata = { title: "Candidates — Objectways Talent" };
 
 const th =
   "border-b-2 border-line-strong pb-3 pr-4 text-left font-mono text-[0.64rem] font-medium uppercase tracking-wider text-ink-faint";

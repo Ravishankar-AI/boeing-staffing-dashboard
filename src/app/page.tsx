@@ -11,9 +11,9 @@ import { StagePill, OpenClosedPill } from "@/components/stage-pill";
 export const dynamic = "force-dynamic";
 
 const VIEWER_NOTE = {
-  admin: "Leadership view · all engagements",
-  recruiter: "Recruiter view · you can update candidate status",
-  client: "Boeing view · read-only",
+  admin: "Client · Boeing · leadership view",
+  recruiter: "Client · Boeing · recruiter view",
+  client: "Client · Boeing · read-only view",
 } as const;
 
 const th =
@@ -39,7 +39,7 @@ export default async function DashboardPage({
       <div className="mb-1 font-mono text-[0.72rem] uppercase tracking-wider text-ink-faint">{VIEWER_NOTE[session.role]}</div>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
         <div>
-          <h1 className="text-[2rem] leading-tight sm:text-[2.5rem]">Boeing Staffing Dashboard</h1>
+          <h1 className="text-[2rem] leading-tight sm:text-[2.5rem]">Talent Dashboard</h1>
           <p className="mt-1 text-[0.85rem] text-ink-soft">
             Openings, resumes sent, and interview status across every Boeing engagement · as of {formatDate(now)}
           </p>

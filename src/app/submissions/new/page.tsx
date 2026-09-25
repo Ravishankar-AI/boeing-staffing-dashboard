@@ -4,7 +4,7 @@ import { listPositionOptions, STAGES, STAGE_META } from "@/lib/staffing";
 import { createSubmission } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Add resume — Boeing Staffing" };
+export const metadata = { title: "Add resume — Objectways Talent" };
 
 const field = "rounded-md border border-line bg-card px-3 py-2 font-mono text-[0.82rem] text-ink focus:border-signal focus:outline-none";
 const label = "flex flex-col gap-1 text-[0.66rem] uppercase tracking-wider text-ink-faint";

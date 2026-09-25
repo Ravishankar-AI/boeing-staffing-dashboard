@@ -1,47 +1,50 @@
-import { prisma } from "@/lib/db";
-import { signInAs } from "./actions";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import { signIn } from "./actions";
 
-export const metadata = { title: "Sign in — Boeing Staffing" };
+export const metadata = { title: "Sign in — Objectways Talent" };
 export const dynamic = "force-dynamic";
 
-const ROLE_NOTE: Record<string, string> = {
-  admin: "Objectways leadership. Sees everything; can edit openings and candidate status.",
-  recruiter: "Objectways recruiters. Add resumes and move candidates through interview stages.",
-  client: "Boeing hiring team. Read-only view of openings, resumes sent, and interview status.",
-};
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  if (await getSession()) redirect("/");
+  const { error } = await searchParams;
 
-export default async function SignInPage() {
-  const users = await prisma.user.findMany({ orderBy: { role: "asc" } });
   return (
-    <div className="mx-auto max-w-[640px] px-4 py-16 sm:px-8">
-      <div className="mb-2 font-mono text-[0.72rem] uppercase tracking-wider text-ink-faint">Mock sign-in — demo only</div>
-      <h1 className="mb-4 text-[2rem]">Who&apos;s looking?</h1>
-      <p className="mb-10 text-ink-soft">
-        Pick a persona to see the dashboard the way Boeing, a recruiter, or leadership would. Real SSO replaces this
-        before go-live.
+    <div className="mx-auto max-w-[440px] px-4 py-20 sm:px-8">
+      <div className="mb-2 font-mono text-[0.72rem] uppercase tracking-wider text-ink-faint">Objectways Talent</div>
+      <h1 className="mb-3 text-[2rem]">Sign in</h1>
+      <p className="mb-8 text-[0.85rem] text-ink-soft">
+        Hiring dashboard for Objectways clients and recruiters. Enter the password you were given.
       </p>
-      <div className="flex flex-col gap-4">
-        {users.map((u) => (
-          <form key={u.id} action={signInAs} className="flex items-center justify-between gap-4 border border-line bg-card p-5">
-            <input type="hidden" name="email" value={u.email} />
-            <div>
-              <div className="font-display text-[1rem] font-extrabold">
-                {u.name}
-                <span className="ml-2 font-mono text-[0.68rem] font-normal uppercase tracking-wider text-signal-ink">
-                  {u.role === "client" ? "Boeing" : u.role}
-                </span>
-              </div>
-              <p className="text-[0.8rem] text-ink-soft">{ROLE_NOTE[u.role]}</p>
-            </div>
-            <button
-              type="submit"
-              className="rounded-pill border border-line-strong bg-line-strong px-4 py-2 font-mono text-[0.7rem] uppercase tracking-wider text-paper hover:opacity-90"
-            >
-              Enter
-            </button>
-          </form>
-        ))}
-      </div>
+      <form action={signIn} className="flex flex-col gap-4 rounded-md border border-line bg-card p-6">
+        <label className="flex flex-col gap-1.5 text-[0.66rem] uppercase tracking-wider text-ink-faint">
+          Password
+          <input
+            type="password"
+            name="password"
+            required
+            autoFocus
+            autoComplete="current-password"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "signin-error" : undefined}
+            className="rounded-md border border-line bg-paper px-3 py-2.5 font-mono text-[0.9rem] normal-case tracking-normal text-ink focus:border-signal focus:outline-none"
+          />
+        </label>
+        {error && (
+          <p id="signin-error" role="alert" className="flex items-center gap-2 text-[0.8rem] text-ink">
+            <span className="font-bold text-critical" aria-hidden>
+              ✕
+            </span>
+            That password isn&apos;t right. Check with Objectways if you need access.
+          </p>
+        )}
+        <button
+          type="submit"
+          className="rounded-pill border border-line-strong bg-line-strong px-4 py-2.5 font-mono text-[0.72rem] uppercase tracking-wider text-paper hover:opacity-90"
+        >
+          Sign in
+        </button>
+      </form>
     </div>
   );
 }
