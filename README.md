@@ -74,25 +74,29 @@ npm run db:seed
 npm run dev
 ```
 
-Visit `/sign-in` and pick a persona.
+Sign in as `ravi@objectways.com` with `ADMIN_PASSWORD`, or register at `/register` and approve yourself from the admin account.
 
-## Sign-in
+## Accounts and activity
 
-Each group has one shared password, and the password decides the role
-(`src/lib/auth.ts`). These are set as variables on the Railway service:
+- **Register:** people request an account at `/register` with their name,
+  work email, company and a password (scrypt-hashed, `src/lib/passwords.ts`).
+  New accounts are `pending` and can't see anything.
+- **Approve:** admins approve or reject requests at `/users` and choose the
+  role (client read-only, recruiter, admin). The role is pre-filled from what
+  the person picked when registering. Admins can also change roles or disable
+  accounts there. A disabled user is signed out on their next request.
+- **Activity:** `/activity` (admins only) shows sign-ins, failed sign-ins,
+  registrations, approvals, candidate status changes, new resumes and edits to
+  openings, with who did each one and when (`src/lib/activity.ts`).
 
-| Variable | Who |
+Railway variables:
+
+| Variable | Purpose |
 | --- | --- |
-| `CLIENT_PASSWORD` | Boeing hiring team (read-only) |
-| `RECRUITER_PASSWORD` | Objectways recruiters |
-| `ADMIN_PASSWORD` | Objectways leadership |
-| `SESSION_SECRET` | Signs the login cookie (32+ random characters) |
+| `SESSION_SECRET` | Signs the login cookie (32+ random characters). Changing it signs everyone out. |
+| `ADMIN_PASSWORD` | First-time password for the seeded admin (`ravi@objectways.com`) on a fresh database. After the first sign-in it's stored as their own password. |
 
-To rotate a password, change the variable and redeploy. Changing
-`SESSION_SECRET` signs everyone out. A group whose password is unset can't
-sign in.
-
-These are shared per group, so there is no per-person audit trail or
-revocation. Move to individual accounts or SSO (Auth.js, Clerk, or Microsoft
-Entra, which Boeing will likely want) before wider rollout, and keep the
-`Session` shape: the pages only read `role`.
+Not built yet: email notifications (admins see a pending count in the
+header instead), password reset (an admin can disable the account and the
+person re-registers), and SSO. When adding SSO, keep the `Session` shape:
+the pages only read `role`.

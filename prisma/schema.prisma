@@ -18,14 +18,40 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  // "admin" | "recruiter" | "client"
-  role      String
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  // "admin" | "recruiter" | "client" — assigned by an admin on approval.
+  role         String
   // Display only, e.g. "Objectways" or "Boeing".
-  company   String
+  company      String
+  // "pending" (registered, awaiting approval) | "active" | "disabled".
+  // Only active users can sign in.
+  status       String        @default("active")
+  // scrypt hash, see src/lib/passwords.ts. Null for seeded placeholder users.
+  passwordHash String?
+  lastLoginAt  DateTime?
+  approvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  activity     ActivityLog[]
+}
+
+// Append-only record of who did what, shown to admins at /activity.
+model ActivityLog {
+  id        String   @id @default(cuid())
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  // Kept even if the user is later renamed, and set for failed sign-ins
+  // where there is no user (holds the email that was tried).
+  actor     String
+  // "sign_in" | "sign_in_failed" | "sign_out" | "register" | "approve" |
+  // "reject" | "disable" | "enable" | "role_change" | "stage_change" |
+  // "submission_create" | "position_update" | "position_create"
+  action    String
+  detail    String?
   createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // One Boeing request/change order (a tab in the old TOR 6131 workbook),

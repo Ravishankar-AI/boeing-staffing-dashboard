@@ -145,11 +145,10 @@ const ENGAGEMENTS: EngagementSeed[] = [
   },
 ];
 
-const USERS = [
-  { email: "ravi@objectways.com", name: "Ravi", role: "admin", company: "Objectways" },
-  { email: "recruiting@objectways.com", name: "Objectways Recruiting", role: "recruiter", company: "Objectways" },
-  { email: "staffing@boeing.example", name: "Boeing Hiring Team", role: "client", company: "Boeing" },
-];
+// Only the first admin is seeded; everyone else registers at /register and
+// is approved by an admin. The admin's first sign-in uses ADMIN_PASSWORD
+// (see src/lib/auth.ts) until they have a password of their own.
+const USERS = [{ email: "ravi@objectways.com", name: "Ravi", role: "admin", company: "Objectways", status: "active" }];
 
 async function main() {
   // `--if-empty` runs on every Railway deploy (see railway.json): it seeds a
@@ -163,6 +162,7 @@ async function main() {
 
   console.log("Seeding staffing data...");
 
+  await prisma.activityLog.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.position.deleteMany();
   await prisma.engagement.deleteMany();
