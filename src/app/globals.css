@@ -99,6 +99,25 @@
   box-sizing: border-box;
 }
 
+/* The Objectways wordmark is dark ink on transparent, with no light
+   variant, so on dark surfaces it sits on a small white plate instead of
+   being recolored (which would change the brand green). */
+.brand-logo {
+  box-sizing: content-box;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-logo {
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
+}
+:root[data-theme="dark"] .brand-logo {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
 body {
   background: var(--paper);
   color: var(--ink);

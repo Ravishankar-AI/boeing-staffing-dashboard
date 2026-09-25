@@ -12,11 +12,12 @@ export function SiteHeader({ session }: { session: Session | null }) {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
       <div className="mx-auto flex h-[68px] max-w-[1240px] items-center justify-between gap-6 px-4 sm:px-8">
-        <Link href="/" className="flex items-baseline gap-[7px] font-display text-[1.05rem] font-extrabold">
-          <span className="inline-block h-[9px] w-[9px] rotate-45 rounded-sm bg-signal" />
-          OBJECTWAYS
-          <span className="ml-0.5 hidden border-l border-line pl-2 font-mono text-[0.68rem] font-medium uppercase tracking-wider text-ink-faint sm:inline">
-            × Boeing Staffing
+        <Link href="/" className="flex items-center gap-3" aria-label="Objectways — Boeing Staffing home">
+          {/* Official wordmark from objectways.com (2560×373). */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/objectways-logo.webp" alt="Objectways" width={165} height={24} className="brand-logo h-6 w-auto" />
+          <span className="hidden border-l border-line pl-3 font-mono text-[0.68rem] font-medium uppercase tracking-wider text-ink-faint sm:inline">
+            Boeing Staffing
           </span>
         </Link>
 
