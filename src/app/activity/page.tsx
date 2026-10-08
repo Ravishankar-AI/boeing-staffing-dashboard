@@ -18,13 +18,15 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
   role_change: { label: "Changed role", glyph: "⇄", tone: "text-info" },
   stage_change: { label: "Updated candidate", glyph: "◑", tone: "text-info" },
   submission_create: { label: "Added resume", glyph: "+", tone: "text-good" },
+  submission_update: { label: "Edited candidate", glyph: "✎", tone: "text-info" },
+  submission_delete: { label: "Deleted candidate", glyph: "✕", tone: "text-critical" },
   position_update: { label: "Updated opening", glyph: "✎", tone: "text-info" },
   position_create: { label: "Added opening", glyph: "+", tone: "text-good" },
 };
 
 const GROUPS: Record<string, string[]> = {
   all: [],
-  pipeline: ["stage_change", "submission_create", "position_update", "position_create"],
+  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "position_update", "position_create"],
   access: ["sign_in", "sign_out", "sign_in_failed"],
   accounts: ["register", "approve", "reject", "disable", "enable", "role_change"],
 };
@@ -68,7 +70,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
         {[
           ["Sign-ins", week.sign_in ?? 0],
-          ["Candidate updates", (week.stage_change ?? 0) + (week.submission_create ?? 0)],
+          ["Candidate updates", (week.stage_change ?? 0) + (week.submission_create ?? 0) + (week.submission_update ?? 0) + (week.submission_delete ?? 0)],
           ["Account requests", week.register ?? 0],
           ["Failed sign-ins", week.sign_in_failed ?? 0],
         ].map(([label, n]) => (

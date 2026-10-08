@@ -17,11 +17,11 @@ const td = "border-b border-dashed border-line py-3 pr-4 align-top";
 export default async function SubmissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ engagement?: string; location?: string; stage?: string; q?: string }>;
+  searchParams: Promise<{ engagement?: string; location?: string; stage?: string; q?: string; deleted?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
-  const filters = await searchParams;
+  const { deleted, ...filters } = await searchParams;
   const data = await loadDashboard(filters);
   const staff = isStaff(session);
 
@@ -44,15 +44,23 @@ export default async function SubmissionsPage({
           </Link>
         )}
       </div>
+      {deleted && (
+        <p role="status" className="mb-6 flex items-center gap-2 rounded-md border border-line bg-card px-4 py-3 text-[0.82rem]">
+          <span className="font-bold text-good" aria-hidden>
+            ✓
+          </span>
+          Deleted {deleted}. It&apos;s recorded in the activity log.
+        </p>
+      )}
       <div className="mb-6">
         <FilterBar action="/submissions" engagements={data.engagements} values={filters} withStage />
       </div>
 
       <div className="overflow-x-auto rounded-md border border-line bg-card p-6">
-        <table className="w-full min-w-[1080px] border-collapse text-[0.8rem]">
+        <table className="w-full min-w-[1140px] border-collapse text-[0.8rem]">
           <thead>
             <tr>
-              {["Candidate", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status"].map((h) => (
+              {["Candidate", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status", ...(staff ? [""] : [])].map((h) => (
                 <th key={h} className={th}>
                   {h}
                 </th>
@@ -75,6 +83,17 @@ export default async function SubmissionsPage({
                   {[s.screeningNotes, s.feedback, s.onboardingNotes].filter(Boolean).join(" · ") || "—"}
                 </td>
                 <td className={td}>{staff ? <StageSelect id={s.id} stage={s.stage} /> : <StagePill stage={s.stage} />}</td>
+                {staff && (
+                  <td className={td}>
+                    <Link
+                      href={`/submissions/${s.id}`}
+                      aria-label={`Edit ${s.candidateName}`}
+                      className="text-[0.7rem] uppercase tracking-wider text-signal-ink hover:underline"
+                    >
+                      Edit
+                    </Link>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

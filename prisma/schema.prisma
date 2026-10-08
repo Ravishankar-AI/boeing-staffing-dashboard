@@ -46,7 +46,8 @@ model ActivityLog {
   actor     String
   // "sign_in" | "sign_in_failed" | "sign_out" | "register" | "approve" |
   // "reject" | "disable" | "enable" | "role_change" | "stage_change" |
-  // "submission_create" | "position_update" | "position_create"
+  // "submission_create" | "submission_update" | "submission_delete" |
+  // "position_update" | "position_create"
   action    String
   detail    String?
   createdAt DateTime @default(now())
@@ -74,6 +75,9 @@ model Position {
   location      String
   required      Int
   filled        Int          @default(0)
+  // "open" | "on_hold" | "closed" (cancelled by the client). "Filled" is not
+  // stored: it is derived when filled >= required (see openingState()).
+  status        String       @default("open")
   // Boeing-side reviewer / hiring manager for this role.
   hiringManager String?
   openedAt      DateTime     @default(now())

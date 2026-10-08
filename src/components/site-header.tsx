@@ -7,9 +7,9 @@ export function SiteHeader({ session, pendingUsers = 0 }: { session: Session | n
     { href: "/", label: "Dashboard" },
     { href: "/submissions", label: "Candidates" },
     ...(session && session.role !== "client" ? [{ href: "/submissions/new", label: "Add resume" }] : []),
+    ...(session && session.role !== "client" ? [{ href: "/positions", label: "Openings" }] : []),
     ...(session?.role === "admin"
       ? [
-          { href: "/positions", label: "Openings" },
           { href: "/users", label: pendingUsers ? `Users (${pendingUsers})` : "Users" },
           { href: "/activity", label: "Activity" },
         ]

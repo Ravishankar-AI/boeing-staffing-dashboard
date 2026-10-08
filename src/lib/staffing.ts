@@ -1,5 +1,5 @@
 import { prisma } from "./db";
-import { ACTIVE_STAGES, IN_INTERVIEW_STAGES, STAGES, STAGE_META, type Stage } from "./stages";
+import { ACTIVE_STAGES, IN_INTERVIEW_STAGES, OPENING_META, STAGES, STAGE_META, openingState, type Stage } from "./stages";
 
 export * from "./stages";
 
@@ -30,9 +30,21 @@ export async function loadDashboard(filters: Filters = {}) {
       positions: e.positions.filter((p) => !filters.location || p.location === filters.location),
     }));
 
-  const positions = scoped.flatMap((e) =>
-    e.positions.map((p) => ({ ...p, engagementName: e.name, engagementCode: e.code, boeingPoc: e.boeingPoc })),
-  );
+  const positions = scoped
+    .flatMap((e) =>
+      e.positions.map((p) => {
+        const state = openingState(p);
+        return { ...p, state, engagementName: e.name, engagementCode: e.code, boeingPoc: e.boeingPoc };
+      }),
+    )
+    // Open first (most headcount still needed on top), then on hold, filled, closed.
+    .sort(
+      (a, b) =>
+        OPENING_META[a.state].order - OPENING_META[b.state].order ||
+        b.required - b.filled - (a.required - a.filled) ||
+        a.engagementName.localeCompare(b.engagementName) ||
+        a.title.localeCompare(b.title),
+    );
   const submissions = positions.flatMap((p) =>
     p.submissions.map((s) => ({
       ...s,
@@ -44,9 +56,16 @@ export async function loadDashboard(filters: Filters = {}) {
     })),
   );
 
-  const required = sum(positions.map((p) => p.required));
-  const filled = sum(positions.map((p) => Math.min(p.filled, p.required)));
-  const openPositions = positions.filter((p) => p.filled < p.required);
+  // Headcount: cancelled ("closed") openings don't count toward requested or
+  // filled. "Open positions" is people still needed on openings that are
+  // actively hiring; on-hold headcount is reported separately.
+  const live = positions.filter((p) => p.state !== "closed");
+  const required = sum(live.map((p) => p.required));
+  const filled = sum(live.map((p) => Math.min(p.filled, p.required)));
+  const openPositions = positions.filter((p) => p.state === "open");
+  const onHoldPositions = positions.filter((p) => p.state === "on_hold");
+  const stateCounts = { open: 0, on_hold: 0, filled: 0, closed: 0 };
+  for (const p of positions) stateCounts[p.state] += 1;
 
   const byStage = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
   for (const s of submissions) byStage[s.stage] += 1;
@@ -90,8 +109,9 @@ export async function loadDashboard(filters: Filters = {}) {
     totals: {
       required,
       filled,
-      open: required - filled,
+      open: sum(openPositions.map((p) => p.required - p.filled)),
       openRoles: openPositions.length,
+      onHold: sum(onHoldPositions.map((p) => p.required - p.filled)),
       roles: positions.length,
       resumesSent: submissions.length,
       last30,
@@ -100,22 +120,36 @@ export async function loadDashboard(filters: Filters = {}) {
       selectedOrOnboarded: byStage.selected + byStage.onboarded,
     },
     byStage,
+    stateCounts,
     funnel,
     waitingOnBoeing,
     waitingOnObjectways,
   };
 }
 
-export async function listPositionOptions() {
-  const positions = await prisma.position.findMany({
-    include: { engagement: true },
-    orderBy: [{ engagement: { createdAt: "asc" } }, { location: "desc" }, { title: "asc" }],
+/** Positions for the Add/Edit candidate picker, grouped by engagement so the
+ * same job title under two Boeing contacts can't be mistaken for a duplicate.
+ * Open roles come first within each group. */
+export async function listPositionGroups() {
+  const engagements = await prisma.engagement.findMany({
+    orderBy: { createdAt: "asc" },
+    include: { positions: true },
   });
-  return positions.map((p) => ({
-    id: p.id,
-    label: `${p.engagement.name} — ${p.title} (${p.location})`,
-    open: p.filled < p.required,
-  }));
+  return engagements
+    .map((e) => ({
+      label: `${e.name} · POC ${e.boeingPoc}`,
+      options: e.positions
+        .map((p) => {
+          const state = openingState(p);
+          const left = p.required - p.filled;
+          const suffix =
+            state === "open" ? `${left} open` : state === "on_hold" ? "on hold" : state === "filled" ? "filled" : "closed";
+          return { id: p.id, label: `${p.title} · ${p.location} — ${suffix}`, order: OPENING_META[state].order, title: p.title };
+        })
+        .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
+    }))
+    .filter((g) => g.options.length > 0)
+    .sort((a, b) => Math.min(...a.options.map((o) => o.order)) - Math.min(...b.options.map((o) => o.order)));
 }
 
 function sum(xs: number[]) {

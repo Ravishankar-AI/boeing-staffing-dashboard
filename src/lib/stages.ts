@@ -38,3 +38,28 @@ export const IN_INTERVIEW_STAGES: Stage[] = ["shortlisted", "interview_scheduled
 export function isStage(s: string): s is Stage {
   return (STAGES as readonly string[]).includes(s);
 }
+
+// --- Openings ---------------------------------------------------------------
+
+// What an admin/recruiter can set. "Filled" is derived, never stored.
+export const OPENING_STATUSES = ["open", "on_hold", "closed"] as const;
+export type OpeningStatus = (typeof OPENING_STATUSES)[number];
+export type OpeningState = "open" | "on_hold" | "filled" | "closed";
+
+export const OPENING_META: Record<OpeningState, { label: string; glyph: string; tone: Tone; order: number }> = {
+  open: { label: "Open", glyph: "○", tone: "warning", order: 0 },
+  on_hold: { label: "On hold", glyph: "‖", tone: "muted", order: 1 },
+  filled: { label: "Filled", glyph: "●", tone: "good", order: 2 },
+  closed: { label: "Closed", glyph: "✕", tone: "muted", order: 3 },
+};
+
+export function isOpeningStatus(s: string | null): s is OpeningStatus {
+  return !!s && (OPENING_STATUSES as readonly string[]).includes(s);
+}
+
+/** Closed (cancelled) wins, then filled headcount, then the stored status. */
+export function openingState(p: { status: string; filled: number; required: number }): OpeningState {
+  if (p.status === "closed") return "closed";
+  if (p.filled >= p.required) return "filled";
+  return p.status === "on_hold" ? "on_hold" : "open";
+}

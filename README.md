@@ -11,8 +11,8 @@ waiting on.
 | Persona | Role | Can |
 | --- | --- | --- |
 | Boeing hiring team | `client` | View the dashboard and candidates (read-only) |
-| Objectways recruiters | `recruiter` | Add resumes sent to Boeing and change candidate status |
-| Leadership (Ravi) | `admin` | Everything, plus edit openings and headcount (`/positions`) |
+| Objectways recruiters | `recruiter` | Add, edit and delete candidates; update openings (status, headcount) at `/positions` |
+| Leadership (Ravi) | `admin` | Everything recruiters can do, plus approve users (`/users`) and see the activity log (`/activity`) |
 
 ## Screens
 
@@ -20,6 +20,11 @@ waiting on.
   Boeing, selected/onboarded), the hiring funnel, a "waiting on Boeing" queue
   with days waiting, a positions table, and recent activity. Filter by
   engagement and US/India.
+- `/submissions/[id]`: edit any field of a candidate, or delete one added by
+  mistake (recruiters and admins; both are recorded in the activity log).
+- `/positions` (Openings): set each opening's status (Open, On hold, Closed)
+  and headcount. "Filled" is shown automatically once filled reaches
+  required. Only open openings count toward Open positions.
 - `/submissions`: every resume sent, filterable by engagement, location,
   status, and name. Recruiters change status inline.
 - `/submissions/new`: add a resume sent to Boeing.

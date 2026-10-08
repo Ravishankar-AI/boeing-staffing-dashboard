@@ -22,14 +22,3 @@ export function StagePill({ stage }: { stage: Stage }) {
     </span>
   );
 }
-
-export function OpenClosedPill({ open }: { open: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill border border-line bg-card px-2.5 py-0.5 text-[0.7rem] text-ink">
-      <span className={open ? "font-bold text-warning" : "font-bold text-good"} aria-hidden>
-        {open ? "○" : "●"}
-      </span>
-      {open ? "Open" : "Closed"}
-    </span>
-  );
-}

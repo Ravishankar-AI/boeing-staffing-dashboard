@@ -6,7 +6,9 @@ import { formatDate, daysSince } from "@/lib/format";
 import { KpiTiles } from "@/components/kpi-tiles";
 import { Funnel } from "@/components/funnel";
 import { FilterBar } from "@/components/filter-bar";
-import { StagePill, OpenClosedPill } from "@/components/stage-pill";
+import { StagePill } from "@/components/stage-pill";
+import { OpeningPill } from "@/components/opening-pill";
+import { OPENING_META, type OpeningState } from "@/lib/stages";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +25,15 @@ const td = "border-b border-dashed border-line py-3 pr-4 align-top";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ engagement?: string; location?: string }>;
+  searchParams: Promise<{ engagement?: string; location?: string; positions?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
 
-  const filters = await searchParams;
+  const { positions: positionFilter = "all", ...filters } = await searchParams;
   const data = await loadDashboard(filters);
+  const shownPositions =
+    positionFilter in OPENING_META ? data.positions.filter((p) => p.state === positionFilter) : data.positions;
   const { totals } = data;
   const now = new Date();
   const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString();
@@ -49,7 +53,13 @@ export default async function DashboardPage({
 
       <KpiTiles
         kpis={[
-          { label: "Open positions", value: totals.open, note: `${totals.openRoles} of ${totals.roles} roles still hiring`, emphasis: true },
+          {
+            label: "Open positions",
+            value: totals.open,
+            // Headcount, not job titles: one opening can need several hires.
+            note: `People still needed, across ${totals.openRoles} job ${totals.openRoles === 1 ? "title" : "titles"}${totals.onHold ? ` · ${totals.onHold} more on hold` : ""}`,
+            emphasis: true,
+          },
           { label: "Positions filled", value: `${totals.filled}/${totals.required}`, note: `${pct(totals.filled, totals.required)}% of headcount` },
           { label: "Resumes sent", value: totals.resumesSent, note: `${totals.last30} in the last 30 days` },
           { label: "In interview process", value: totals.inInterview, note: "Shortlisted → awaiting feedback" },
@@ -115,12 +125,32 @@ export default async function DashboardPage({
         </section>
       </div>
 
-      <section className="mt-8 rounded-md border border-line bg-card p-6">
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-[1.05rem]">Positions</h2>
-          <span className="text-[0.72rem] text-ink-faint">
-            {totals.open} open · {totals.filled} filled · {totals.required} requested
-          </span>
+      <section id="positions" className="mt-8 scroll-mt-20 rounded-md border border-line bg-card p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[1.05rem]">Positions</h2>
+            <p className="text-[0.72rem] text-ink-faint">
+              {totals.open} people still needed · {totals.filled} of {totals.required} hired · open roles first
+            </p>
+          </div>
+          <nav aria-label="Filter positions" className="flex flex-wrap gap-2 text-[0.68rem] uppercase tracking-wider">
+            {(["all", "open", "on_hold", "filled", "closed"] as const).map((f) => {
+              const count = f === "all" ? data.positions.length : data.stateCounts[f as OpeningState];
+              const params = new URLSearchParams({ ...(qs ? Object.fromEntries(new URLSearchParams(qs)) : {}), ...(f === "all" ? {} : { positions: f }) });
+              const active = f === positionFilter || (f === "all" && !(positionFilter in OPENING_META));
+              return (
+                <Link
+                  key={f}
+                  href={`/?${params.toString()}#positions`}
+                  scroll={false}
+                  aria-current={active ? "true" : undefined}
+                  className={`rounded-pill border px-3 py-1.5 ${active ? "border-line-strong bg-line-strong text-paper" : "border-line text-ink-soft hover:text-ink"}`}
+                >
+                  {f === "all" ? "All" : OPENING_META[f].label} · {count}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-[0.82rem]">
@@ -134,12 +164,11 @@ export default async function DashboardPage({
               </tr>
             </thead>
             <tbody>
-              {data.positions.map((p) => {
+              {shownPositions.map((p) => {
                 const inProcess = p.submissions.filter((s) => IN_INTERVIEW_STAGES.includes(s.stage as never) || s.stage === "submitted").length;
                 const onboarded = p.submissions.filter((s) => s.stage === "onboarded").length;
-                const open = p.filled < p.required;
                 return (
-                  <tr key={p.id} className="hover:bg-paper-alt">
+                  <tr key={p.id} className={`hover:bg-paper-alt ${p.state === "closed" || p.state === "filled" ? "text-ink-soft" : ""}`}>
                     <td className={`${td} text-ink-soft`}>
                       {p.engagementName}
                       <div className="text-[0.7rem] text-ink-faint">POC {p.boeingPoc}</div>
@@ -167,13 +196,14 @@ export default async function DashboardPage({
                     <td className={`${td} tabular-nums`}>{inProcess}</td>
                     <td className={`${td} tabular-nums`}>{onboarded}</td>
                     <td className={td}>
-                      <OpenClosedPill open={open} />
+                      <OpeningPill state={p.state} />
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          {shownPositions.length === 0 && <p className="pt-4 text-[0.82rem] text-ink-faint">No positions with this status.</p>}
         </div>
       </section>
 

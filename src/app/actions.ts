@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole, type Role } from "@/lib/auth";
-import { isStage, STAGE_META } from "@/lib/staffing";
+import { isOpeningStatus, isStage, openingState, OPENING_META, STAGE_META } from "@/lib/staffing";
 import { logActivity } from "@/lib/activity";
 
 function str(formData: FormData, key: string) {
@@ -54,6 +54,8 @@ export async function createSubmission(formData: FormData) {
       screeningNotes: str(formData, "screeningNotes"),
       interviewer: str(formData, "interviewer"),
       interviewAt: interviewAt ? new Date(interviewAt) : null,
+      feedback: str(formData, "feedback"),
+      onboardingNotes: str(formData, "onboardingNotes"),
     },
   });
   await logActivity(session, "submission_create", `${candidateName} → ${position.title} (${position.location}) · ${position.engagement.name}`);
@@ -61,23 +63,110 @@ export async function createSubmission(formData: FormData) {
   redirect("/submissions");
 }
 
-export async function updatePosition(formData: FormData) {
-  const session = await requireRole("admin");
+const SUBMISSION_FIELDS = {
+  candidateName: "name",
+  positionId: "position",
+  sentAt: "date sent",
+  stage: "status",
+  interviewer: "interviewer",
+  interviewAt: "interview date",
+  screeningNotes: "screening remarks",
+  feedback: "feedback",
+  onboardingNotes: "onboarding notes",
+} as const;
+
+export async function updateSubmission(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
   if (!session) throw new Error("Not allowed");
   const id = str(formData, "id");
-  if (!id) throw new Error("Missing position");
-  const required = Math.max(0, Number(formData.get("required") ?? 0));
-  const filled = Math.max(0, Number(formData.get("filled") ?? 0));
+  const positionId = str(formData, "positionId");
+  const candidateName = str(formData, "candidateName");
+  const stage = str(formData, "stage");
+  const sentAt = str(formData, "sentAt");
+  if (!id || !positionId || !candidateName || !sentAt || !stage || !isStage(stage)) throw new Error("Invalid candidate update");
+  const interviewAt = str(formData, "interviewAt");
+
+  const [before, position] = await Promise.all([
+    prisma.submission.findUniqueOrThrow({ where: { id } }),
+    prisma.position.findUniqueOrThrow({ where: { id: positionId } }),
+  ]);
+  const data = {
+    candidateName,
+    positionId,
+    location: position.location,
+    sentAt: new Date(sentAt),
+    stage,
+    interviewer: str(formData, "interviewer"),
+    interviewAt: interviewAt ? new Date(interviewAt) : null,
+    screeningNotes: str(formData, "screeningNotes"),
+    feedback: str(formData, "feedback"),
+    onboardingNotes: str(formData, "onboardingNotes"),
+  };
+  const same = (a: unknown, b: unknown) =>
+    a instanceof Date || b instanceof Date ? (a as Date | null)?.getTime() === (b as Date | null)?.getTime() : (a ?? null) === (b ?? null);
+  const changed = (Object.keys(SUBMISSION_FIELDS) as (keyof typeof SUBMISSION_FIELDS)[]).filter((k) => !same(before[k], data[k]));
+
+  if (changed.length) {
+    await prisma.submission.update({ where: { id }, data });
+    const detail = changed
+      .map((k) =>
+        k === "stage"
+          ? `status ${STAGE_META[before.stage as keyof typeof STAGE_META]?.label ?? before.stage} → ${STAGE_META[stage].label}`
+          : k === "candidateName"
+            ? `name ${before.candidateName} → ${candidateName}`
+            : k === "positionId"
+              ? `position → ${position.title} (${position.location})`
+              : SUBMISSION_FIELDS[k],
+      )
+      .join(", ");
+    await logActivity(session, "submission_update", `${candidateName}: ${detail}`);
+  }
+  revalidatePath("/", "layout");
+  redirect("/submissions");
+}
+
+export async function deleteSubmission(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  if (!id) throw new Error("Missing candidate");
+  const s = await prisma.submission.findUniqueOrThrow({ where: { id }, include: { position: { include: { engagement: true } } } });
+  await prisma.submission.delete({ where: { id } });
+  // The log keeps enough to identify what was removed, since the row is gone.
+  await logActivity(
+    session,
+    "submission_delete",
+    `${s.candidateName} — ${s.position.title} (${s.position.location}) · ${s.position.engagement.name} · was ${STAGE_META[s.stage as keyof typeof STAGE_META]?.label ?? s.stage}, sent ${s.sentAt.toISOString().slice(0, 10)}`,
+  );
+  revalidatePath("/", "layout");
+  redirect(`/submissions?deleted=${encodeURIComponent(s.candidateName)}`);
+}
+
+export async function updatePosition(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  const status = str(formData, "status");
+  if (!id || !isOpeningStatus(status)) throw new Error("Invalid opening update");
+  const required = Math.max(1, Math.floor(Number(formData.get("required") ?? 1)) || 1);
+  const filled = Math.min(required, Math.max(0, Math.floor(Number(formData.get("filled") ?? 0)) || 0));
+  const before = await prisma.position.findUniqueOrThrow({ where: { id } });
   const p = await prisma.position.update({
     where: { id },
-    data: { required, filled, hiringManager: str(formData, "hiringManager") },
+    data: { required, filled, status, hiringManager: str(formData, "hiringManager") },
   });
-  await logActivity(session, "position_update", `${p.title} (${p.location}): ${filled}/${required} filled`);
+  const was = OPENING_META[openingState(before)].label;
+  const now = OPENING_META[openingState(p)].label;
+  await logActivity(
+    session,
+    "position_update",
+    `${p.title} (${p.location}): ${filled}/${required} filled${was !== now ? `, ${was} → ${now}` : ""}`,
+  );
   revalidatePath("/", "layout");
 }
 
 export async function createPosition(formData: FormData) {
-  const session = await requireRole("admin");
+  const session = await requireRole("admin", "recruiter");
   if (!session) throw new Error("Not allowed");
   const engagementId = str(formData, "engagementId");
   const title = str(formData, "title");

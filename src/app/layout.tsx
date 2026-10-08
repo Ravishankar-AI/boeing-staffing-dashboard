@@ -17,8 +17,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="flex min-h-screen flex-col">
         <SiteHeader session={session} pendingUsers={pendingUsers} />
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-line py-6 text-center text-[0.68rem] uppercase tracking-wider text-ink-faint">
-          Objectways Talent · Client hiring dashboard
+        <footer className="border-t border-line px-4 py-6 text-center text-[0.72rem] text-ink-faint">
+          <p>Copyright © {new Date().getFullYear()} Objectways - All rights reserved.</p>
+          <p className="mt-1 text-[0.66rem] uppercase tracking-wider">Objectways Talent · Client hiring dashboard</p>
         </footer>
       </body>
     </html>
