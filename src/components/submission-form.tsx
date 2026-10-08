@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { STAGES, STAGE_META } from "@/lib/stages";
+import { formatSize } from "@/lib/resumes";
+import { ResumeInput } from "./resume-input";
 
 type Group = { label: string; options: { id: string; label: string }[] };
 type Values = {
@@ -12,6 +14,7 @@ type Values = {
   screeningNotes?: string | null;
   feedback?: string | null;
   onboardingNotes?: string | null;
+  resume?: { filename: string; size: number; uploadedAt: Date } | null;
 };
 
 const field = "rounded-md border border-line bg-card px-3 py-2 font-mono text-[0.82rem] text-ink focus:border-signal focus:outline-none";
@@ -55,6 +58,24 @@ export function SubmissionForm({
         Candidate name
         <input name="candidateName" required defaultValue={values.candidateName} className={field} />
       </label>
+      {values.resume ? (
+        <div className="flex flex-col gap-2 rounded-md border border-line bg-paper p-3">
+          <div className="text-[0.66rem] uppercase tracking-wider text-ink-faint">Current resume</div>
+          <div className="flex flex-wrap items-center gap-3 text-[0.82rem]">
+            <a href={`/resumes/${id}`} className="font-semibold text-signal-ink underline">
+              {values.resume.filename}
+            </a>
+            <span className="text-[0.72rem] text-ink-faint">{formatSize(values.resume.size)}</span>
+            <label className="ml-auto flex items-center gap-2 text-[0.75rem] text-ink-soft">
+              <input type="checkbox" name="removeResume" value="1" className="accent-[var(--critical)]" />
+              Remove
+            </label>
+          </div>
+          <ResumeInput label="Replace with a new file" />
+        </div>
+      ) : (
+        <ResumeInput />
+      )}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <label className={label}>
           Date sent to Boeing

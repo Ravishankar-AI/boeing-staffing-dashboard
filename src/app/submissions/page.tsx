@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession, isStaff } from "@/lib/auth";
 import { loadDashboard } from "@/lib/staffing";
 import { formatDate } from "@/lib/format";
+import { formatSize } from "@/lib/resumes";
 import { FilterBar } from "@/components/filter-bar";
 import { StagePill } from "@/components/stage-pill";
 import { StageSelect } from "@/components/stage-select";
@@ -57,10 +58,10 @@ export default async function SubmissionsPage({
       </div>
 
       <div className="overflow-x-auto rounded-md border border-line bg-card p-6">
-        <table className="w-full min-w-[1140px] border-collapse text-[0.8rem]">
+        <table className="w-full min-w-[1200px] border-collapse text-[0.8rem]">
           <thead>
             <tr>
-              {["Candidate", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status", ...(staff ? [""] : [])].map((h) => (
+              {["Candidate", "Resume", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status", ...(staff ? [""] : [])].map((h) => (
                 <th key={h} className={th}>
                   {h}
                 </th>
@@ -71,6 +72,20 @@ export default async function SubmissionsPage({
             {data.submissions.map((s) => (
               <tr key={s.id} className="hover:bg-paper-alt">
                 <td className={`${td} font-semibold`}>{s.candidateName}</td>
+                <td className={td}>
+                  {s.resume ? (
+                    <a
+                      href={`/resumes/${s.id}`}
+                      title={`${s.resume.filename} · ${formatSize(s.resume.size)}`}
+                      aria-label={`Download resume for ${s.candidateName}`}
+                      className="whitespace-nowrap text-[0.72rem] uppercase tracking-wider text-signal-ink hover:underline"
+                    >
+                      ↓ {s.resume.filename.split(".").pop()}
+                    </a>
+                  ) : (
+                    <span className="text-ink-faint">—</span>
+                  )}
+                </td>
                 <td className={td}>
                   {s.positionTitle}
                   <div className="text-[0.7rem] text-ink-faint">{s.positionLocation}</div>

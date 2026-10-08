@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireRole, type Role } from "@/lib/auth";
 import { isOpeningStatus, isStage, openingState, OPENING_META, STAGE_META } from "@/lib/staffing";
 import { logActivity } from "@/lib/activity";
+import { readResume } from "@/lib/resumes";
 
 function str(formData: FormData, key: string) {
   const v = String(formData.get(key) ?? "").trim();
@@ -39,6 +40,9 @@ export async function createSubmission(formData: FormData) {
   const candidateName = str(formData, "candidateName");
   if (!positionId || !candidateName) throw new Error("Position and candidate name are required");
 
+  const resume = await readResume(formData.get("resume"));
+  if (typeof resume === "string") redirect(`/submissions/new?error=${resume}`);
+
   const position = await prisma.position.findUniqueOrThrow({ where: { id: positionId }, include: { engagement: true } });
   const sentAt = str(formData, "sentAt");
   const interviewAt = str(formData, "interviewAt");
@@ -56,9 +60,14 @@ export async function createSubmission(formData: FormData) {
       interviewAt: interviewAt ? new Date(interviewAt) : null,
       feedback: str(formData, "feedback"),
       onboardingNotes: str(formData, "onboardingNotes"),
+      ...(resume ? { resume: { create: { ...resume, uploadedBy: session.name } } } : {}),
     },
   });
-  await logActivity(session, "submission_create", `${candidateName} → ${position.title} (${position.location}) · ${position.engagement.name}`);
+  await logActivity(
+    session,
+    "submission_create",
+    `${candidateName} → ${position.title} (${position.location}) · ${position.engagement.name}${resume ? ` · resume ${resume.filename}` : " · no resume file"}`,
+  );
   revalidatePath("/", "layout");
   redirect("/submissions");
 }
@@ -85,6 +94,9 @@ export async function updateSubmission(formData: FormData) {
   const sentAt = str(formData, "sentAt");
   if (!id || !positionId || !candidateName || !sentAt || !stage || !isStage(stage)) throw new Error("Invalid candidate update");
   const interviewAt = str(formData, "interviewAt");
+  const resume = await readResume(formData.get("resume"));
+  if (typeof resume === "string") redirect(`/submissions/${id}?error=${resume}`);
+  const removeResume = !resume && formData.get("removeResume") === "1";
 
   const [before, position] = await Promise.all([
     prisma.submission.findUniqueOrThrow({ where: { id } }),
@@ -105,6 +117,18 @@ export async function updateSubmission(formData: FormData) {
   const same = (a: unknown, b: unknown) =>
     a instanceof Date || b instanceof Date ? (a as Date | null)?.getTime() === (b as Date | null)?.getTime() : (a ?? null) === (b ?? null);
   const changed = (Object.keys(SUBMISSION_FIELDS) as (keyof typeof SUBMISSION_FIELDS)[]).filter((k) => !same(before[k], data[k]));
+
+  if (resume) {
+    await prisma.resumeFile.upsert({
+      where: { submissionId: id },
+      create: { submissionId: id, ...resume, uploadedBy: session.name },
+      update: { ...resume, uploadedBy: session.name, uploadedAt: new Date() },
+    });
+    await logActivity(session, "resume_upload", `${candidateName} · ${resume.filename}`);
+  } else if (removeResume) {
+    const removed = await prisma.resumeFile.deleteMany({ where: { submissionId: id } });
+    if (removed.count) await logActivity(session, "resume_remove", candidateName);
+  }
 
   if (changed.length) {
     await prisma.submission.update({ where: { id }, data });

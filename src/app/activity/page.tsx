@@ -20,13 +20,17 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
   submission_create: { label: "Added resume", glyph: "+", tone: "text-good" },
   submission_update: { label: "Edited candidate", glyph: "✎", tone: "text-info" },
   submission_delete: { label: "Deleted candidate", glyph: "✕", tone: "text-critical" },
+  resume_upload: { label: "Uploaded resume", glyph: "↑", tone: "text-good" },
+  resume_remove: { label: "Removed resume", glyph: "–", tone: "text-critical" },
+  resume_download: { label: "Downloaded resume", glyph: "↓", tone: "text-info" },
   position_update: { label: "Updated opening", glyph: "✎", tone: "text-info" },
   position_create: { label: "Added opening", glyph: "+", tone: "text-good" },
 };
 
 const GROUPS: Record<string, string[]> = {
   all: [],
-  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "position_update", "position_create"],
+  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create"],
+  downloads: ["resume_download"],
   access: ["sign_in", "sign_out", "sign_in_failed"],
   accounts: ["register", "approve", "reject", "disable", "enable", "role_change"],
 };
@@ -90,7 +94,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
               aria-current={g === group ? "page" : undefined}
               className={`rounded-pill border px-3 py-1.5 ${g === group ? "border-line-strong bg-line-strong text-paper" : "border-line text-ink-soft hover:text-ink"}`}
             >
-              {g === "all" ? "Everything" : g === "pipeline" ? "Candidates & openings" : g === "access" ? "Sign-ins" : "Accounts"}
+              {g === "all" ? "Everything" : g === "pipeline" ? "Candidates & openings" : g === "access" ? "Sign-ins" : g === "downloads" ? "Resume downloads" : "Accounts"}
             </Link>
           ))}
         </nav>

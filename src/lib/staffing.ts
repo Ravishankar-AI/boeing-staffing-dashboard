@@ -18,7 +18,13 @@ export async function loadDashboard(filters: Filters = {}) {
     include: {
       positions: {
         orderBy: [{ location: "desc" }, { title: "asc" }],
-        include: { submissions: { orderBy: { sentAt: "desc" } } },
+        include: {
+          submissions: {
+            orderBy: { sentAt: "desc" },
+            // Metadata only — never load file bytes into list views.
+            include: { resume: { select: { filename: true, size: true } } },
+          },
+        },
       },
     },
   });

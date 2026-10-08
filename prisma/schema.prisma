@@ -47,6 +47,7 @@ model ActivityLog {
   // "sign_in" | "sign_in_failed" | "sign_out" | "register" | "approve" |
   // "reject" | "disable" | "enable" | "role_change" | "stage_change" |
   // "submission_create" | "submission_update" | "submission_delete" |
+  // "resume_upload" | "resume_remove" | "resume_download" |
   // "position_update" | "position_create"
   action    String
   detail    String?
@@ -105,9 +106,26 @@ model Submission {
   interviewAt     DateTime?
   feedback        String?
   onboardingNotes String?
+  resume          ResumeFile?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@index([positionId])
   @@index([stage])
+}
+
+// The resume document for a submission (PDF or Word, max 10 MB), stored in
+// Postgres so it is backed up with everything else and only reachable through
+// the app's own access check (src/app/resumes/[id]/route.ts). Kept in its own
+// table so list queries never load file bytes.
+model ResumeFile {
+  id           String     @id @default(cuid())
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId String     @unique
+  filename     String
+  contentType  String
+  size         Int
+  data         Bytes
+  uploadedBy   String
+  uploadedAt   DateTime   @default(now())
 }

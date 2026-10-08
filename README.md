@@ -27,8 +27,12 @@ waiting on.
   required. Only open openings count toward Open positions.
 - `/submissions`: every resume sent, filterable by engagement, location,
   status, and name. Recruiters change status inline.
-- `/submissions/new`: add a resume sent to Boeing.
-- `/positions`: add a new opening from Boeing and update required/filled counts (admin only).
+- `/submissions/new`: add a candidate sent to Boeing, with their resume file
+  (PDF or Word, up to 10 MB). Resumes can be replaced or removed on the edit
+  page, and anyone signed in (including Boeing) downloads them from
+  `/submissions`. Files are stored in Postgres (`ResumeFile`), are checked by
+  their contents rather than their names, and every upload, removal and
+  download is recorded in the activity log.
 
 ## Data model
 

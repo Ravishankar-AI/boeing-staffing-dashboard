@@ -7,14 +7,29 @@ import { formatDate } from "@/lib/format";
 import { deleteSubmission, updateSubmission } from "@/app/actions";
 import { SubmissionForm } from "@/components/submission-form";
 import { DeleteButton } from "@/components/delete-button";
+import { UploadError } from "@/components/upload-error";
+import { RESUME_ERRORS, type ResumeError } from "@/lib/resumes";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Edit candidate — Objectways Talent" };
 
-export default async function EditSubmissionPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditSubmissionPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   if (!(await requireRole("admin", "recruiter"))) redirect("/");
   const { id } = await params;
-  const [submission, groups] = await Promise.all([prisma.submission.findUnique({ where: { id } }), listPositionGroups()]);
+  const { error } = await searchParams;
+  const [submission, groups] = await Promise.all([
+    prisma.submission.findUnique({
+      where: { id },
+      include: { resume: { select: { filename: true, size: true, uploadedAt: true } } },
+    }),
+    listPositionGroups(),
+  ]);
   if (!submission) notFound();
 
   return (
@@ -27,6 +42,7 @@ export default async function EditSubmissionPage({ params }: { params: Promise<{
         Added {formatDate(submission.createdAt)} · last changed {formatDate(submission.updatedAt)}. Changes are recorded in
         the activity log.
       </p>
+      {error && error in RESUME_ERRORS && <UploadError message={RESUME_ERRORS[error as ResumeError]} />}
       <SubmissionForm action={updateSubmission} groups={groups} values={submission} id={submission.id} submitLabel="Save changes">
         <Link href="/submissions" className="px-2 text-[0.72rem] uppercase tracking-wider text-ink-soft hover:text-ink">
           Cancel
