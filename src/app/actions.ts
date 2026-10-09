@@ -197,11 +197,76 @@ export async function createPosition(formData: FormData) {
   const location = str(formData, "location");
   if (!engagementId || !title || !location) throw new Error("Engagement, title and location are required");
   const required = Math.max(1, Number(formData.get("required") ?? 1));
-  await prisma.position.create({
+  const p = await prisma.position.create({
     data: { engagementId, title, location, required, hiringManager: str(formData, "hiringManager") },
+    include: { engagement: true },
   });
-  await logActivity(session, "position_create", `${title} (${location}), ${required} needed`);
+  await logActivity(session, "position_create", `${title} (${location}), ${required} needed · ${p.engagement.name}`);
   revalidatePath("/", "layout");
+  redirect(`/positions?engagement=${engagementId}#eng-${engagementId}`);
+}
+
+// --- Engagements (a Boeing request / change order with its own POC) ---
+
+/** "CR05 · Navneet" → "CR05-NAVNEET", made unique. The code is what the
+ * dashboard's engagement filter puts in the URL. */
+async function engagementCode(name: string) {
+  const base =
+    name
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "ENGAGEMENT";
+  for (let n = 1; ; n++) {
+    const code = n === 1 ? base : `${base}-${n}`;
+    if (!(await prisma.engagement.findUnique({ where: { code } }))) return code;
+  }
+}
+
+export async function createEngagement(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const name = str(formData, "name");
+  const boeingPoc = str(formData, "boeingPoc");
+  if (!name || !boeingPoc) throw new Error("Engagement name and Boeing POC are required");
+  const e = await prisma.engagement.create({ data: { name, boeingPoc, code: await engagementCode(name) } });
+  await logActivity(session, "engagement_create", `${name} · POC ${boeingPoc}`);
+  revalidatePath("/", "layout");
+  // Land on the new engagement with the "new opening" form pointed at it.
+  redirect(`/positions?engagement=${e.id}#add-opening`);
+}
+
+export async function updateEngagement(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  const name = str(formData, "name");
+  const boeingPoc = str(formData, "boeingPoc");
+  if (!id || !name || !boeingPoc) throw new Error("Engagement name and Boeing POC are required");
+  const before = await prisma.engagement.findUniqueOrThrow({ where: { id } });
+  if (before.name === name && before.boeingPoc === boeingPoc) return;
+  await prisma.engagement.update({ where: { id }, data: { name, boeingPoc } });
+  const changes = [
+    before.name !== name ? `name ${before.name} → ${name}` : null,
+    before.boeingPoc !== boeingPoc ? `POC ${before.boeingPoc} → ${boeingPoc}` : null,
+  ].filter(Boolean);
+  await logActivity(session, "engagement_update", changes.join(", "));
+  revalidatePath("/", "layout");
+}
+
+export async function deleteEngagement(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  if (!id) throw new Error("Missing engagement");
+  const e = await prisma.engagement.findUniqueOrThrow({ where: { id }, include: { _count: { select: { positions: true } } } });
+  // Only an empty engagement (e.g. created by mistake) can be deleted, so
+  // openings and their candidates can never disappear this way.
+  if (e._count.positions > 0) throw new Error("Remove or move its openings first");
+  await prisma.engagement.delete({ where: { id } });
+  await logActivity(session, "engagement_delete", `${e.name} · POC ${e.boeingPoc}`);
+  revalidatePath("/", "layout");
+  redirect("/positions");
 }
 
 // --- Accounts (admin only) ---

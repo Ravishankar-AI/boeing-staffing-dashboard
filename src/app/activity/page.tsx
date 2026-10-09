@@ -25,11 +25,14 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
   resume_download: { label: "Downloaded resume", glyph: "↓", tone: "text-info" },
   position_update: { label: "Updated opening", glyph: "✎", tone: "text-info" },
   position_create: { label: "Added opening", glyph: "+", tone: "text-good" },
+  engagement_create: { label: "Added engagement", glyph: "+", tone: "text-good" },
+  engagement_update: { label: "Edited engagement", glyph: "✎", tone: "text-info" },
+  engagement_delete: { label: "Deleted engagement", glyph: "✕", tone: "text-critical" },
 };
 
 const GROUPS: Record<string, string[]> = {
   all: [],
-  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create"],
+  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create", "engagement_create", "engagement_update", "engagement_delete"],
   downloads: ["resume_download"],
   access: ["sign_in", "sign_out", "sign_in_failed"],
   accounts: ["register", "approve", "reject", "disable", "enable", "role_change"],

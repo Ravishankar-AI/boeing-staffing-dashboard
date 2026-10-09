@@ -48,7 +48,8 @@ model ActivityLog {
   // "reject" | "disable" | "enable" | "role_change" | "stage_change" |
   // "submission_create" | "submission_update" | "submission_delete" |
   // "resume_upload" | "resume_remove" | "resume_download" |
-  // "position_update" | "position_create"
+  // "position_update" | "position_create" | "engagement_create" |
+  // "engagement_update" | "engagement_delete"
   action    String
   detail    String?
   createdAt DateTime @default(now())
