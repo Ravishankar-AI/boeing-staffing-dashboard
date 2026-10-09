@@ -7,6 +7,7 @@ import { requireRole, type Role } from "@/lib/auth";
 import { isOpeningStatus, isStage, openingState, OPENING_META, STAGE_META } from "@/lib/staffing";
 import { logActivity } from "@/lib/activity";
 import { readResume } from "@/lib/resumes";
+import { processEmail, settleEmail, syncInbox } from "@/lib/inbox";
 
 function str(formData: FormData, key: string) {
   const v = String(formData.get(key) ?? "").trim();
@@ -377,5 +378,104 @@ export async function updateUser(formData: FormData) {
   const u = await prisma.user.update({ where: { id }, data: { role, status } });
   if (before.role !== role) await logActivity(session, "role_change", `${u.name}: ${before.role} → ${role}`);
   if (before.status !== status) await logActivity(session, status === "disabled" ? "disable" : "enable", `${u.name} (${u.email})`);
+  revalidatePath("/", "layout");
+}
+
+// --- Mailbox import (recruiters and admins) ---
+
+export async function checkInboxNow() {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const r = await syncInbox();
+  await logActivity(session, "inbox_sync", r.message);
+  revalidatePath("/", "layout");
+}
+
+export async function retryEmail(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  if (!id) throw new Error("Missing email");
+  const email = await prisma.inboundEmail.findUniqueOrThrow({ where: { id }, include: { _count: { select: { attachments: true } } } });
+  // Re-fetch attachments only if none were stored the first time.
+  await processEmail(id, email._count.attachments === 0 ? email.graphId : null);
+  revalidatePath("/", "layout");
+}
+
+export async function confirmDraft(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  const candidateName = str(formData, "candidateName");
+  const positionId = str(formData, "positionId");
+  const sentAt = str(formData, "sentAt");
+  if (!id || !candidateName || !positionId || !sentAt) throw new Error("Name, position and date are required");
+  const attachmentId = str(formData, "attachmentId");
+
+  const draft = await prisma.emailDraft.findUniqueOrThrow({ where: { id }, include: { email: true } });
+  if (draft.status !== "pending") return; // already handled (double click / two recruiters)
+  const [position, file] = await Promise.all([
+    prisma.position.findUniqueOrThrow({ where: { id: positionId }, include: { changeRequest: true } }),
+    attachmentId ? prisma.emailAttachment.findFirst({ where: { id: attachmentId, emailId: draft.emailId } }) : null,
+  ]);
+
+  const submission = await prisma.$transaction(async (tx) => {
+    // Claim the draft first so a concurrent confirm can't create a second candidate.
+    const claimed = await tx.emailDraft.updateMany({ where: { id, status: "pending" }, data: { status: "confirmed" } });
+    if (claimed.count === 0) return null;
+    const s = await tx.submission.create({
+      data: {
+        positionId,
+        candidateName,
+        location: position.location,
+        sentAt: new Date(sentAt),
+        stage: "submitted",
+        screeningNotes: str(formData, "screeningNotes"),
+        ...(file
+          ? {
+              resume: {
+                create: {
+                  filename: file.filename,
+                  contentType: file.contentType,
+                  size: file.size,
+                  data: file.data,
+                  uploadedBy: `${session.name} (from email)`,
+                },
+              },
+            }
+          : {}),
+      },
+    });
+    await tx.emailDraft.update({
+      where: { id },
+      data: { submissionId: s.id, candidateName, positionId, handledBy: session.name, handledAt: new Date() },
+    });
+    return s;
+  });
+  if (submission) {
+    await logActivity(
+      session,
+      "email_import",
+      `${candidateName} → ${position.title} (${position.location}) · ${position.changeRequest.code}${file ? ` · resume ${file.filename}` : ""} · from "${draft.email.subject}"`,
+    );
+  }
+  await settleEmail(draft.emailId);
+  revalidatePath("/", "layout");
+}
+
+export async function dismissDraft(formData: FormData) {
+  const session = await requireRole("admin", "recruiter");
+  if (!session) throw new Error("Not allowed");
+  const id = str(formData, "id");
+  if (!id) throw new Error("Missing draft");
+  const d = await prisma.emailDraft.updateMany({
+    where: { id, status: "pending" },
+    data: { status: "dismissed", handledBy: session.name, handledAt: new Date() },
+  });
+  if (d.count) {
+    const draft = await prisma.emailDraft.findUniqueOrThrow({ where: { id }, include: { email: true } });
+    await logActivity(session, "email_dismiss", `${draft.candidateName} · from "${draft.email.subject}"`);
+    await settleEmail(draft.emailId);
+  }
   revalidatePath("/", "layout");
 }

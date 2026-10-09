@@ -111,6 +111,52 @@ Railway variables:
 | `SESSION_SECRET` | Signs the login cookie (32+ random characters). Changing it signs everyone out. |
 | `ADMIN_PASSWORD` | First-time password for the seeded admin (`ravi@objectways.com`) on a fresh database. After the first sign-in it's stored as their own password. |
 
+## Mailbox import (consulting@objectways.com)
+
+Recruiters copy **consulting@objectways.com** when they email profiles to
+Boeing. Every 10 minutes a Railway cron service calls
+`POST /api/inbox/sync` (with `Authorization: Bearer $CRON_SECRET`). The app
+then:
+
+1. Reads new inbox mail from that one mailbox through Microsoft Graph
+   (read-only; `src/lib/graph.ts`).
+2. Keeps resume attachments that pass the same PDF/Word checks as uploads.
+3. Asks Claude (`claude-opus-5-5`, structured JSON output; `src/lib/extract.ts`)
+   which candidates the email submits and for which opening. PDF resumes are
+   sent as documents. The email is treated as data, and position ids and file
+   names are checked against what was sent.
+4. Stores one **draft** per candidate. Recruiters review drafts at `/inbox`,
+   fix anything, and **Confirm** (creates the candidate and attaches the
+   resume) or **Dismiss**. Nothing from email is visible to Boeing until a
+   person confirms it.
+
+Each email is processed once (keyed by its Graph id). Failed emails show on
+`/inbox` with a Retry button, and "Check now" runs a sync immediately.
+
+### Microsoft 365 setup (one time, by a Microsoft 365 admin)
+
+1. **Entra admin center → App registrations → New registration**, e.g.
+   "Objectways Talent – mailbox reader", single tenant. Note the
+   **Application (client) ID** and **Directory (tenant) ID**.
+2. **Certificates & secrets → New client secret.** Copy the secret value.
+3. **Limit the app to consulting@ only.** Use Exchange Online *RBAC for
+   Applications* (Exchange Online PowerShell):
+   ```powershell
+   New-ServicePrincipal -AppId <client-id> -ObjectId <enterprise-app-object-id> -DisplayName "Objectways Talent"
+   New-ManagementScope -Name "Talent mailbox" -RecipientRestrictionFilter "PrimarySmtpAddress -eq 'consulting@objectways.com'"
+   New-ManagementRoleAssignment -App <client-id> -Role "Application Mail.Read" -CustomResourceScope "Talent mailbox"
+   Test-ServicePrincipalAuthorization -Identity <client-id> -Resource consulting@objectways.com
+   ```
+   Don't also grant the tenant-wide Microsoft Graph **Mail.Read** application
+   permission in Entra. That consent would apply to every mailbox and
+   override the scope above.
+4. Set these Railway variables on the app service: `MS_TENANT_ID`,
+   `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `INBOX_MAILBOX`
+   (`consulting@objectways.com`) and `ANTHROPIC_API_KEY`. Redeploy.
+
+`CRON_SECRET` (32+ random characters) must be the same on the app service and
+the `inbox-sync` cron service.
+
 Not built yet: email notifications (admins see a pending count in the
 header instead), password reset (an admin can disable the account and the
 person re-registers), and SSO. When adding SSO, keep the `Session` shape:

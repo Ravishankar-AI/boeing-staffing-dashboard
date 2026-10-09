@@ -30,14 +30,17 @@ export async function readResume(entry: FormDataEntryValue | null): Promise<Resu
   // itself refuses a genuinely empty file before submit (resume-input.tsx).
   if (!entry || typeof entry === "string" || entry.size === 0) return null;
   if (entry.size > MAX_RESUME_BYTES) return "resume_size";
+  return readResumeBytes(entry.name, Buffer.from(await entry.arrayBuffer()));
+}
 
-  const ext = entry.name.toLowerCase().split(".").pop() as keyof typeof TYPES;
+/** The same checks for bytes that didn't come from a form (email attachments). */
+export function readResumeBytes(name: string, data: Buffer): ResumeUpload | ResumeError | null {
+  if (data.length === 0) return null;
+  if (data.length > MAX_RESUME_BYTES) return "resume_size";
+  const ext = name.toLowerCase().split(".").pop() as keyof typeof TYPES;
   const type = TYPES[ext];
-  if (!type) return "resume_type";
-  const data = Buffer.from(await entry.arrayBuffer());
-  if (!type.magic.every((b, i) => data[i] === b)) return "resume_type";
-
-  return { filename: cleanFilename(entry.name), contentType: type.contentType, size: data.length, data };
+  if (!type || !type.magic.every((b, i) => data[i] === b)) return "resume_type";
+  return { filename: cleanFilename(name), contentType: type.contentType, size: data.length, data };
 }
 
 function cleanFilename(name: string) {

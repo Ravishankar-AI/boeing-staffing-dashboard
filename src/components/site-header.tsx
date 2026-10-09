@@ -2,12 +2,25 @@ import Link from "next/link";
 import type { Session } from "@/lib/auth";
 import { signOut } from "@/app/sign-in/actions";
 
-export function SiteHeader({ session, pendingUsers = 0 }: { session: Session | null; pendingUsers?: number }) {
+export function SiteHeader({
+  session,
+  pendingUsers = 0,
+  inboxDrafts = 0,
+}: {
+  session: Session | null;
+  pendingUsers?: number;
+  inboxDrafts?: number;
+}) {
   const links = [
     { href: "/", label: "Dashboard" },
     { href: "/submissions", label: "Candidates" },
     ...(session && session.role !== "client" ? [{ href: "/submissions/new", label: "Add resume" }] : []),
-    ...(session && session.role !== "client" ? [{ href: "/positions", label: "Openings" }] : []),
+    ...(session && session.role !== "client"
+      ? [
+          { href: "/inbox", label: inboxDrafts ? `Inbox (${inboxDrafts})` : "Inbox" },
+          { href: "/positions", label: "Openings" },
+        ]
+      : []),
     ...(session?.role === "admin"
       ? [
           { href: "/users", label: pendingUsers ? `Users (${pendingUsers})` : "Users" },

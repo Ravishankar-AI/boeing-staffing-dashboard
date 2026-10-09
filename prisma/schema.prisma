@@ -49,7 +49,8 @@ model ActivityLog {
   // "submission_create" | "submission_update" | "submission_delete" |
   // "resume_upload" | "resume_remove" | "resume_download" |
   // "position_update" | "position_create" | "cr_create" | "cr_update" |
-  // "cr_delete" | "owner_create" (older rows may say "engagement_*")
+  // "cr_delete" | "owner_create" | "email_import" | "email_dismiss" |
+  // "inbox_sync" (older rows may say "engagement_*")
   action    String
   detail    String?
   createdAt DateTime @default(now())
@@ -153,4 +154,73 @@ model ResumeFile {
   data         Bytes
   uploadedBy   String
   uploadedAt   DateTime   @default(now())
+}
+
+// --- Mailbox import (src/lib/inbox.ts) ---------------------------------------
+// Recruiters cc consulting@objectways.com when sending profiles to Boeing. The
+// app reads that one mailbox (read-only, Microsoft Graph), Claude proposes a
+// draft candidate per profile, and a recruiter confirms each draft before it
+// becomes a Submission. Nothing from email reaches Boeing's view unconfirmed.
+
+model InboundEmail {
+  id          String            @id @default(cuid())
+  // Microsoft Graph message id; each email is processed once.
+  graphId     String            @unique
+  subject     String
+  fromName    String?
+  fromAddress String?
+  // "Name <address>, ..." of To + Cc, for display and owner matching.
+  recipients  String
+  receivedAt  DateTime
+  bodyText    String
+  // "parsed" (drafts made) | "no_profiles" | "error" | "done" (all drafts handled)
+  status      String
+  error       String?
+  // Claude's one-line description of the email.
+  summary     String?
+  createdAt   DateTime          @default(now())
+  attachments EmailAttachment[]
+  drafts      EmailDraft[]
+
+  @@index([receivedAt])
+}
+
+// A resume attached to an inbound email (same PDF/Word checks as uploads).
+model EmailAttachment {
+  id          String       @id @default(cuid())
+  email       InboundEmail @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  emailId     String
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  drafts      EmailDraft[]
+}
+
+model EmailDraft {
+  id            String           @id @default(cuid())
+  email         InboundEmail     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  emailId       String
+  candidateName String
+  // Claude's suggested opening; the recruiter can change it before confirming.
+  positionId    String?
+  attachment    EmailAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  attachmentId  String?
+  // Why Claude matched it this way, plus any duplicate warning.
+  note          String?
+  // "pending" | "confirmed" | "dismissed"
+  status        String           @default("pending")
+  submissionId  String?
+  handledBy     String?
+  handledAt     DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([status])
+}
+
+// Small key/value store: last mailbox sync result and the sync lock.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt
 }

@@ -29,6 +29,9 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
   cr_update: { label: "Edited change request", glyph: "✎", tone: "text-info" },
   cr_delete: { label: "Deleted change request", glyph: "✕", tone: "text-critical" },
   owner_create: { label: "Added business owner", glyph: "+", tone: "text-good" },
+  email_import: { label: "Added candidate from email", glyph: "✉", tone: "text-good" },
+  email_dismiss: { label: "Dismissed email draft", glyph: "–", tone: "text-muted" },
+  inbox_sync: { label: "Checked the mailbox", glyph: "↻", tone: "text-info" },
   // Entries recorded before engagements became change requests.
   engagement_create: { label: "Added engagement", glyph: "+", tone: "text-good" },
   engagement_update: { label: "Edited engagement", glyph: "✎", tone: "text-info" },
@@ -37,7 +40,7 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
 
 const GROUPS: Record<string, string[]> = {
   all: [],
-  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create", "cr_create", "cr_update", "cr_delete", "owner_create", "engagement_create", "engagement_update", "engagement_delete"],
+  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create", "cr_create", "cr_update", "cr_delete", "owner_create", "email_import", "email_dismiss", "engagement_create", "engagement_update", "engagement_delete"],
   downloads: ["resume_download"],
   access: ["sign_in", "sign_out", "sign_in_failed"],
   accounts: ["register", "approve", "reject", "disable", "enable", "role_change"],
