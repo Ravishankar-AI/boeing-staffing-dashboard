@@ -18,11 +18,11 @@ const td = "border-b border-dashed border-line py-3 pr-4 align-top";
 export default async function SubmissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ engagement?: string; location?: string; stage?: string; q?: string; deleted?: string }>;
+  searchParams: Promise<{ engagement?: string; location?: string; stage?: string; q?: string; deleted?: string; saved?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
-  const { deleted, ...filters } = await searchParams;
+  const { deleted, saved, ...filters } = await searchParams;
   const data = await loadDashboard(filters);
   const staff = isStaff(session);
 
@@ -33,7 +33,7 @@ export default async function SubmissionsPage({
           <h1 className="text-[2rem] leading-tight">Candidates</h1>
           <p className="mt-1 text-[0.85rem] text-ink-soft">
             {data.submissions.length} of {data.totals.resumesSent} resumes sent
-            {staff ? " · change a status and it saves immediately" : ""}
+            {staff ? " · click a name or ✎ Edit to change interview dates, feedback, the name or anything else" : ""}
           </p>
         </div>
         {staff && (
@@ -45,6 +45,14 @@ export default async function SubmissionsPage({
           </Link>
         )}
       </div>
+      {saved && (
+        <p role="status" className="mb-6 flex items-center gap-2 rounded-md border border-line bg-card px-4 py-3 text-[0.82rem]">
+          <span className="font-bold text-good" aria-hidden>
+            ✓
+          </span>
+          Saved changes to {saved}.
+        </p>
+      )}
       {deleted && (
         <p role="status" className="mb-6 flex items-center gap-2 rounded-md border border-line bg-card px-4 py-3 text-[0.82rem]">
           <span className="font-bold text-good" aria-hidden>
@@ -61,7 +69,7 @@ export default async function SubmissionsPage({
         <table className="w-full min-w-[1200px] border-collapse text-[0.8rem]">
           <thead>
             <tr>
-              {["Candidate", "Resume", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status", ...(staff ? [""] : [])].map((h) => (
+              {["Candidate", "Resume", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status"].map((h) => (
                 <th key={h} className={th}>
                   {h}
                 </th>
@@ -71,7 +79,26 @@ export default async function SubmissionsPage({
           <tbody>
             {data.submissions.map((s) => (
               <tr key={s.id} className="hover:bg-paper-alt">
-                <td className={`${td} font-semibold`}>{s.candidateName}</td>
+                <td className={`${td} font-semibold`}>
+                  {staff ? (
+                    // Edit lives next to the name: a last-column link sat off
+                    // screen in this wide table and people couldn't find it.
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Link href={`/submissions/${s.id}`} className="hover:underline">
+                        {s.candidateName}
+                      </Link>
+                      <Link
+                        href={`/submissions/${s.id}`}
+                        aria-label={`Edit ${s.candidateName}`}
+                        className="rounded-pill border border-line-strong px-2 py-0.5 font-mono text-[0.62rem] font-normal uppercase tracking-wider text-ink hover:bg-paper-alt"
+                      >
+                        ✎ Edit
+                      </Link>
+                    </div>
+                  ) : (
+                    s.candidateName
+                  )}
+                </td>
                 <td className={td}>
                   {s.resume ? (
                     <a
@@ -98,17 +125,6 @@ export default async function SubmissionsPage({
                   {[s.screeningNotes, s.feedback, s.onboardingNotes].filter(Boolean).join(" · ") || "—"}
                 </td>
                 <td className={td}>{staff ? <StageSelect id={s.id} stage={s.stage} /> : <StagePill stage={s.stage} />}</td>
-                {staff && (
-                  <td className={td}>
-                    <Link
-                      href={`/submissions/${s.id}`}
-                      aria-label={`Edit ${s.candidateName}`}
-                      className="text-[0.7rem] uppercase tracking-wider text-signal-ink hover:underline"
-                    >
-                      Edit
-                    </Link>
-                  </td>
-                )}
               </tr>
             ))}
           </tbody>

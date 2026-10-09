@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { loadDashboard, STAGE_META, IN_INTERVIEW_STAGES } from "@/lib/staffing";
 import { formatDate, daysSince } from "@/lib/format";
 import { KpiTiles } from "@/components/kpi-tiles";
@@ -32,6 +32,16 @@ export default async function DashboardPage({
 
   const { positions: positionFilter = "all", ...filters } = await searchParams;
   const data = await loadDashboard(filters);
+  const staff = isStaff(session);
+  // Recruiters/admins can jump from any name on the dashboard to its edit page.
+  const nameLink = (id: string, name: string) =>
+    staff ? (
+      <Link href={`/submissions/${id}`} className="hover:underline" title="Edit candidate">
+        {name}
+      </Link>
+    ) : (
+      name
+    );
   const shownPositions =
     positionFilter in OPENING_META ? data.positions.filter((p) => p.state === positionFilter) : data.positions;
   const { totals } = data;
@@ -101,7 +111,7 @@ export default async function DashboardPage({
               return (
                 <li key={s.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5">
                   <div className="min-w-0">
-                    <div className="truncate text-[0.85rem] font-semibold">{s.candidateName}</div>
+                    <div className="truncate text-[0.85rem] font-semibold">{nameLink(s.id, s.candidateName)}</div>
                     <div className="truncate text-[0.72rem] text-ink-faint">
                       {s.positionTitle} · {s.positionLocation} · {s.engagementName}
                     </div>
@@ -231,7 +241,7 @@ export default async function DashboardPage({
                 .slice(0, 8)
                 .map((s) => (
                   <tr key={s.id}>
-                    <td className={`${td} font-semibold`}>{s.candidateName}</td>
+                    <td className={`${td} font-semibold`}>{nameLink(s.id, s.candidateName)}</td>
                     <td className={`${td} text-ink-soft`}>
                       {s.positionTitle} · {s.positionLocation}
                     </td>

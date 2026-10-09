@@ -146,7 +146,7 @@ export async function updateSubmission(formData: FormData) {
     await logActivity(session, "submission_update", `${candidateName}: ${detail}`);
   }
   revalidatePath("/", "layout");
-  redirect("/submissions");
+  redirect(`/submissions?saved=${encodeURIComponent(candidateName)}`);
 }
 
 export async function deleteSubmission(formData: FormData) {
