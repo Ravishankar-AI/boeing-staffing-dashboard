@@ -18,7 +18,7 @@ export default async function NewSubmissionPage({ searchParams }: { searchParams
     <div className="mx-auto max-w-[720px] px-4 py-10 sm:px-8">
       <h1 className="mb-2 text-[2rem]">Add a resume sent to Boeing</h1>
       <p className="mb-8 text-[0.85rem] text-ink-soft">
-        It shows up on Boeing&apos;s dashboard as soon as you save. Positions are grouped by engagement, open roles first.
+        It shows up on Boeing&apos;s dashboard as soon as you save. Positions are grouped by change request, open roles first.
       </p>
       {error && error in RESUME_ERRORS && <UploadError message={RESUME_ERRORS[error as ResumeError]} />}
       <SubmissionForm action={createSubmission} groups={groups} submitLabel="Save resume" />

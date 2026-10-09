@@ -43,7 +43,7 @@ export async function createSubmission(formData: FormData) {
   const resume = await readResume(formData.get("resume"));
   if (typeof resume === "string") redirect(`/submissions/new?error=${resume}`);
 
-  const position = await prisma.position.findUniqueOrThrow({ where: { id: positionId }, include: { engagement: true } });
+  const position = await prisma.position.findUniqueOrThrow({ where: { id: positionId }, include: { changeRequest: true } });
   const sentAt = str(formData, "sentAt");
   const interviewAt = str(formData, "interviewAt");
   const stage = str(formData, "stage") ?? "submitted";
@@ -66,7 +66,7 @@ export async function createSubmission(formData: FormData) {
   await logActivity(
     session,
     "submission_create",
-    `${candidateName} → ${position.title} (${position.location}) · ${position.engagement.name}${resume ? ` · resume ${resume.filename}` : " · no resume file"}`,
+    `${candidateName} → ${position.title} (${position.location}) · ${position.changeRequest.code}${resume ? ` · resume ${resume.filename}` : " · no resume file"}`,
   );
   revalidatePath("/", "layout");
   redirect("/submissions");
@@ -154,13 +154,13 @@ export async function deleteSubmission(formData: FormData) {
   if (!session) throw new Error("Not allowed");
   const id = str(formData, "id");
   if (!id) throw new Error("Missing candidate");
-  const s = await prisma.submission.findUniqueOrThrow({ where: { id }, include: { position: { include: { engagement: true } } } });
+  const s = await prisma.submission.findUniqueOrThrow({ where: { id }, include: { position: { include: { changeRequest: true } } } });
   await prisma.submission.delete({ where: { id } });
   // The log keeps enough to identify what was removed, since the row is gone.
   await logActivity(
     session,
     "submission_delete",
-    `${s.candidateName} — ${s.position.title} (${s.position.location}) · ${s.position.engagement.name} · was ${STAGE_META[s.stage as keyof typeof STAGE_META]?.label ?? s.stage}, sent ${s.sentAt.toISOString().slice(0, 10)}`,
+    `${s.candidateName} — ${s.position.title} (${s.position.location}) · ${s.position.changeRequest.code} · was ${STAGE_META[s.stage as keyof typeof STAGE_META]?.label ?? s.stage}, sent ${s.sentAt.toISOString().slice(0, 10)}`,
   );
   revalidatePath("/", "layout");
   redirect(`/submissions?deleted=${encodeURIComponent(s.candidateName)}`);
@@ -174,17 +174,21 @@ export async function updatePosition(formData: FormData) {
   if (!id || !isOpeningStatus(status)) throw new Error("Invalid opening update");
   const required = Math.max(1, Math.floor(Number(formData.get("required") ?? 1)) || 1);
   const filled = Math.min(required, Math.max(0, Math.floor(Number(formData.get("filled") ?? 0)) || 0));
-  const before = await prisma.position.findUniqueOrThrow({ where: { id } });
+  const before = await prisma.position.findUniqueOrThrow({ where: { id }, include: { owner: true } });
+  const businessOwnerId = await openingOwner(formData, before.changeRequestId);
   const p = await prisma.position.update({
     where: { id },
-    data: { required, filled, status, hiringManager: str(formData, "hiringManager") },
+    data: { required, filled, status, businessOwnerId, hiringManager: str(formData, "hiringManager") },
+    include: { owner: true },
   });
   const was = OPENING_META[openingState(before)].label;
   const now = OPENING_META[openingState(p)].label;
   await logActivity(
     session,
     "position_update",
-    `${p.title} (${p.location}): ${filled}/${required} filled${was !== now ? `, ${was} → ${now}` : ""}`,
+    `${p.title} (${p.location}): ${filled}/${required} filled${was !== now ? `, ${was} → ${now}` : ""}${
+      before.owner?.name !== p.owner?.name ? `, owner ${before.owner?.name ?? "none"} → ${p.owner?.name ?? "none"}` : ""
+    }`,
   );
   revalidatePath("/", "layout");
 }
@@ -192,79 +196,139 @@ export async function updatePosition(formData: FormData) {
 export async function createPosition(formData: FormData) {
   const session = await requireRole("admin", "recruiter");
   if (!session) throw new Error("Not allowed");
-  const engagementId = str(formData, "engagementId");
+  const changeRequestId = str(formData, "changeRequestId");
   const title = str(formData, "title");
   const location = str(formData, "location");
-  if (!engagementId || !title || !location) throw new Error("Engagement, title and location are required");
+  if (!changeRequestId || !title || !location) throw new Error("Change request, title and location are required");
   const required = Math.max(1, Number(formData.get("required") ?? 1));
+  const businessOwnerId = await openingOwner(formData, changeRequestId);
   const p = await prisma.position.create({
-    data: { engagementId, title, location, required, hiringManager: str(formData, "hiringManager") },
-    include: { engagement: true },
+    data: { changeRequestId, businessOwnerId, title, location, required, hiringManager: str(formData, "hiringManager") },
+    include: { changeRequest: true, owner: true },
   });
-  await logActivity(session, "position_create", `${title} (${location}), ${required} needed · ${p.engagement.name}`);
+  await logActivity(
+    session,
+    "position_create",
+    `${title} (${location}), ${required} needed · ${p.changeRequest.code}${p.owner ? ` · ${p.owner.name}` : ""}`,
+  );
   revalidatePath("/", "layout");
-  redirect(`/positions?engagement=${engagementId}#eng-${engagementId}`);
+  redirect(`/positions?cr=${changeRequestId}#cr-${changeRequestId}`);
 }
 
-// --- Engagements (a Boeing request / change order with its own POC) ---
+/** The opening's business owner from the form: a new name typed in, or the
+ * owner picked from the list. Either way the owner is linked to the CR. */
+async function openingOwner(formData: FormData, changeRequestId: string) {
+  // A name typed into "new owner" wins over the dropdown.
+  const typed = str(formData, "newOwner");
+  const ownerId = typed ? ((await ownersFromText(typed)).ids[0] ?? null) : str(formData, "businessOwnerId");
+  if (ownerId) await linkOwner(changeRequestId, ownerId);
+  return ownerId;
+}
 
-/** "CR05 · Navneet" → "CR05-NAVNEET", made unique. The code is what the
- * dashboard's engagement filter puts in the URL. */
-async function engagementCode(name: string) {
-  const base =
-    name
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 40) || "ENGAGEMENT";
-  for (let n = 1; ; n++) {
-    const code = n === 1 ? base : `${base}-${n}`;
-    if (!(await prisma.engagement.findUnique({ where: { code } }))) return code;
+// --- Change requests and business owners ---
+// A CR can have several business owners and an owner can sit on several CRs
+// (ChangeRequestOwner). Each opening belongs to one CR and one owner.
+
+/** "Lakshmi, Christos" / "Lakshmi / Christos" → owner ids, creating owners
+ * that don't exist yet. Matches existing names case-insensitively so
+ * "lakshmi" doesn't become a second Lakshmi. */
+async function ownersFromText(text: string | null) {
+  const names = [...new Set((text ?? "").split(/\s*(?:,|\/|&|;)\s*/).map((n) => n.trim()).filter(Boolean))];
+  const ids: string[] = [];
+  const created: string[] = [];
+  for (const name of names) {
+    const existing = await prisma.businessOwner.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+    if (existing) ids.push(existing.id);
+    else {
+      ids.push((await prisma.businessOwner.create({ data: { name } })).id);
+      created.push(name);
+    }
   }
+  return { ids, created };
 }
 
-export async function createEngagement(formData: FormData) {
+async function linkOwner(changeRequestId: string, businessOwnerId: string) {
+  await prisma.changeRequestOwner.upsert({
+    where: { changeRequestId_businessOwnerId: { changeRequestId, businessOwnerId } },
+    create: { changeRequestId, businessOwnerId },
+    update: {},
+  });
+}
+
+const crCode = (v: string | null) => (v ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
+
+export async function createChangeRequest(formData: FormData) {
   const session = await requireRole("admin", "recruiter");
   if (!session) throw new Error("Not allowed");
-  const name = str(formData, "name");
-  const boeingPoc = str(formData, "boeingPoc");
-  if (!name || !boeingPoc) throw new Error("Engagement name and Boeing POC are required");
-  const e = await prisma.engagement.create({ data: { name, boeingPoc, code: await engagementCode(name) } });
-  await logActivity(session, "engagement_create", `${name} · POC ${boeingPoc}`);
+  const code = crCode(str(formData, "code"));
+  if (!code) redirect("/positions?error=cr_code");
+  if (await prisma.changeRequest.findFirst({ where: { code: { equals: code, mode: "insensitive" } } })) {
+    redirect(`/positions?error=cr_exists&code=${encodeURIComponent(code)}`);
+  }
+  const { ids, created } = await ownersFromText(str(formData, "owners"));
+  const cr = await prisma.changeRequest.create({
+    data: { code, title: str(formData, "title"), owners: { create: ids.map((businessOwnerId) => ({ businessOwnerId })) } },
+    include: { owners: { include: { owner: true } } },
+  });
+  if (created.length) await logActivity(session, "owner_create", created.join(", "));
+  await logActivity(session, "cr_create", `${code}${cr.owners.length ? ` · owners ${cr.owners.map((o) => o.owner.name).join(", ")}` : ""}`);
   revalidatePath("/", "layout");
-  // Land on the new engagement with the "new opening" form pointed at it.
-  redirect(`/positions?engagement=${e.id}#add-opening`);
+  // Land on the new CR with the "new opening" form pointed at it.
+  redirect(`/positions?cr=${cr.id}#add-opening`);
 }
 
-export async function updateEngagement(formData: FormData) {
+export async function updateChangeRequest(formData: FormData) {
   const session = await requireRole("admin", "recruiter");
   if (!session) throw new Error("Not allowed");
   const id = str(formData, "id");
-  const name = str(formData, "name");
-  const boeingPoc = str(formData, "boeingPoc");
-  if (!id || !name || !boeingPoc) throw new Error("Engagement name and Boeing POC are required");
-  const before = await prisma.engagement.findUniqueOrThrow({ where: { id } });
-  if (before.name === name && before.boeingPoc === boeingPoc) return;
-  await prisma.engagement.update({ where: { id }, data: { name, boeingPoc } });
+  const code = crCode(str(formData, "code"));
+  if (!id || !code) throw new Error("CR code is required");
+  const before = await prisma.changeRequest.findUniqueOrThrow({
+    where: { id },
+    include: { owners: { include: { owner: true } }, positions: { select: { businessOwnerId: true } } },
+  });
+  const clash = await prisma.changeRequest.findFirst({ where: { code: { equals: code, mode: "insensitive" }, id: { not: id } } });
+  if (clash) throw new Error(`Another change request is already called ${code}`);
+
+  const { ids, created } = await ownersFromText(str(formData, "owners"));
+  // An owner who still has openings in this CR stays on it.
+  const keep = new Set([...ids, ...before.positions.map((p) => p.businessOwnerId).filter((x): x is string => !!x)]);
+  const title = str(formData, "title");
+  await prisma.$transaction([
+    prisma.changeRequest.update({ where: { id }, data: { code, title } }),
+    prisma.changeRequestOwner.deleteMany({ where: { changeRequestId: id, businessOwnerId: { notIn: [...keep] } } }),
+    ...[...keep].map((businessOwnerId) =>
+      prisma.changeRequestOwner.upsert({
+        where: { changeRequestId_businessOwnerId: { changeRequestId: id, businessOwnerId } },
+        create: { changeRequestId: id, businessOwnerId },
+        update: {},
+      }),
+    ),
+  ]);
+  const after = await prisma.businessOwner.findMany({ where: { id: { in: [...keep] } }, orderBy: { name: "asc" } });
+  const was = before.owners.map((o) => o.owner.name).sort().join(", ");
+  const now = after.map((o) => o.name).join(", ");
   const changes = [
-    before.name !== name ? `name ${before.name} → ${name}` : null,
-    before.boeingPoc !== boeingPoc ? `POC ${before.boeingPoc} → ${boeingPoc}` : null,
+    before.code !== code ? `code ${before.code} → ${code}` : null,
+    (before.title ?? "") !== (title ?? "") ? "description" : null,
+    was !== now ? `owners ${was || "none"} → ${now || "none"}` : null,
   ].filter(Boolean);
-  await logActivity(session, "engagement_update", changes.join(", "));
+  if (created.length) await logActivity(session, "owner_create", created.join(", "));
+  if (changes.length) await logActivity(session, "cr_update", `${code}: ${changes.join(", ")}`);
   revalidatePath("/", "layout");
 }
 
-export async function deleteEngagement(formData: FormData) {
+export async function deleteChangeRequest(formData: FormData) {
   const session = await requireRole("admin", "recruiter");
   if (!session) throw new Error("Not allowed");
   const id = str(formData, "id");
-  if (!id) throw new Error("Missing engagement");
-  const e = await prisma.engagement.findUniqueOrThrow({ where: { id }, include: { _count: { select: { positions: true } } } });
-  // Only an empty engagement (e.g. created by mistake) can be deleted, so
-  // openings and their candidates can never disappear this way.
-  if (e._count.positions > 0) throw new Error("Remove or move its openings first");
-  await prisma.engagement.delete({ where: { id } });
-  await logActivity(session, "engagement_delete", `${e.name} · POC ${e.boeingPoc}`);
+  if (!id) throw new Error("Missing change request");
+  const cr = await prisma.changeRequest.findUniqueOrThrow({ where: { id }, include: { _count: { select: { positions: true } } } });
+  // Only an empty CR (e.g. created by mistake) can be deleted, so openings
+  // and their candidates can never disappear this way.
+  if (cr._count.positions > 0) throw new Error("Remove or move its openings first");
+  await prisma.changeRequest.delete({ where: { id } });
+  await logActivity(session, "cr_delete", cr.code);
   revalidatePath("/", "layout");
   redirect("/positions");
 }

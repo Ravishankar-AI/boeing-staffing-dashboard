@@ -6,6 +6,7 @@ import { formatDate, daysSince } from "@/lib/format";
 import { KpiTiles } from "@/components/kpi-tiles";
 import { Funnel } from "@/components/funnel";
 import { FilterBar } from "@/components/filter-bar";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { StagePill } from "@/components/stage-pill";
 import { OpeningPill } from "@/components/opening-pill";
 import { OPENING_META, type OpeningState } from "@/lib/stages";
@@ -25,7 +26,7 @@ const td = "border-b border-dashed border-line py-3 pr-4 align-top";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ engagement?: string; location?: string; positions?: string }>;
+  searchParams: Promise<{ cr?: string; owner?: string; location?: string; positions?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
@@ -50,15 +51,16 @@ export default async function DashboardPage({
 
   return (
     <div className="mx-auto max-w-[1240px] px-4 py-10 sm:px-8">
+      <AutoRefresh />
       <div className="mb-1 font-mono text-[0.72rem] uppercase tracking-wider text-ink-faint">{VIEWER_NOTE[session.role]}</div>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="text-[2rem] leading-tight sm:text-[2.5rem]">Talent Dashboard</h1>
           <p className="mt-1 text-[0.85rem] text-ink-soft">
-            Openings, resumes sent, and interview status across every Boeing engagement · as of {formatDate(now)}
+            Openings, resumes sent, and interview status across every change request · as of {formatDate(now)} · updates every minute
           </p>
         </div>
-        <FilterBar action="/" engagements={data.engagements} values={filters} />
+        <FilterBar action="/" crs={data.crs} owners={data.owners} values={filters} />
       </div>
 
       <KpiTiles
@@ -113,7 +115,8 @@ export default async function DashboardPage({
                   <div className="min-w-0">
                     <div className="truncate text-[0.85rem] font-semibold">{nameLink(s.id, s.candidateName)}</div>
                     <div className="truncate text-[0.72rem] text-ink-faint">
-                      {s.positionTitle} · {s.positionLocation} · {s.engagementName}
+                      {s.positionTitle} · {s.positionLocation} · {s.crCode}
+                      {s.ownerName ? ` · ${s.ownerName}` : ""}
                     </div>
                   </div>
                   <div className="ml-auto flex shrink-0 items-center gap-3">
@@ -153,6 +156,7 @@ export default async function DashboardPage({
                   key={f}
                   href={`/?${params.toString()}#positions`}
                   scroll={false}
+                  prefetch={false}
                   aria-current={active ? "true" : undefined}
                   className={`rounded-pill border px-3 py-1.5 ${active ? "border-line-strong bg-line-strong text-paper" : "border-line text-ink-soft hover:text-ink"}`}
                 >
@@ -166,7 +170,7 @@ export default async function DashboardPage({
           <table className="w-full min-w-[900px] border-collapse text-[0.82rem]">
             <thead>
               <tr>
-                {["Engagement", "Role", "Loc.", "Boeing reviewer", "Headcount", "Resumes", "In process", "Onboarded", "Status"].map((h) => (
+                {["CR", "Role", "Loc.", "Business owner", "Boeing reviewer", "Headcount", "Resumes", "In process", "Onboarded", "Status"].map((h) => (
                   <th key={h} className={th}>
                     {h}
                   </th>
@@ -176,19 +180,19 @@ export default async function DashboardPage({
             <tbody>
               {shownPositions.map((p) => {
                 const inProcess = p.submissions.filter((s) => IN_INTERVIEW_STAGES.includes(s.stage as never) || s.stage === "submitted").length;
-                const onboarded = p.submissions.filter((s) => s.stage === "onboarded").length;
                 return (
                   <tr key={p.id} className={`hover:bg-paper-alt ${p.state === "closed" || p.state === "filled" ? "text-ink-soft" : ""}`}>
-                    <td className={`${td} text-ink-soft`}>
-                      {p.engagementName}
-                      <div className="text-[0.7rem] text-ink-faint">POC {p.boeingPoc}</div>
-                    </td>
+                    <td className={`${td} whitespace-nowrap text-ink-soft`}>{p.crCode}</td>
                     <td className={`${td} font-semibold`}>
-                      <Link href={`/submissions?engagement=${p.engagementCode}&location=${p.location}`} className="hover:underline">
+                      <Link
+                        href={`/submissions?${new URLSearchParams({ cr: p.crCode, location: p.location, ...(p.businessOwnerId ? { owner: p.businessOwnerId } : {}) })}`}
+                        className="hover:underline"
+                      >
                         {p.title}
                       </Link>
                     </td>
                     <td className={td}>{p.location}</td>
+                    <td className={td}>{p.ownerName ?? <span className="text-ink-faint">—</span>}</td>
                     <td className={`${td} text-ink-soft`}>{p.hiringManager ?? "—"}</td>
                     <td className={td}>
                       <div className="flex items-center gap-2">
@@ -204,7 +208,7 @@ export default async function DashboardPage({
                     </td>
                     <td className={`${td} tabular-nums`}>{p.submissions.length}</td>
                     <td className={`${td} tabular-nums`}>{inProcess}</td>
-                    <td className={`${td} tabular-nums`}>{onboarded}</td>
+                    <td className={`${td} tabular-nums`}>{p.onboarded}</td>
                     <td className={td}>
                       <OpeningPill state={p.state} />
                     </td>

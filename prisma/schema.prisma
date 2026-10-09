@@ -48,8 +48,8 @@ model ActivityLog {
   // "reject" | "disable" | "enable" | "role_change" | "stage_change" |
   // "submission_create" | "submission_update" | "submission_delete" |
   // "resume_upload" | "resume_remove" | "resume_download" |
-  // "position_update" | "position_create" | "engagement_create" |
-  // "engagement_update" | "engagement_delete"
+  // "position_update" | "position_create" | "cr_create" | "cr_update" |
+  // "cr_delete" | "owner_create" (older rows may say "engagement_*")
   action    String
   detail    String?
   createdAt DateTime @default(now())
@@ -57,43 +57,67 @@ model ActivityLog {
   @@index([createdAt])
 }
 
-// One Boeing request/change order (a tab in the old TOR 6131 workbook),
-// owned by a Boeing point of contact.
-model Engagement {
-  id        String     @id @default(cuid())
-  code      String     @unique
-  name      String
-  boeingPoc String
-  createdAt DateTime   @default(now())
+// A Boeing change request (e.g. "CR04", or the base "TOR 6131" scope).
+// Several business owners can sit on one CR, and one owner can have
+// several CRs; each opening belongs to one CR and (usually) one owner.
+model ChangeRequest {
+  id        String               @id @default(cuid())
+  // Short identifier shown everywhere and used in dashboard filter URLs.
+  code      String               @unique
+  // Optional longer description.
+  title     String?
+  createdAt DateTime             @default(now())
+  owners    ChangeRequestOwner[]
   positions Position[]
 }
 
+// A Boeing business owner / point of contact.
+model BusinessOwner {
+  id        String               @id @default(cuid())
+  name      String               @unique
+  createdAt DateTime             @default(now())
+  crs       ChangeRequestOwner[]
+  positions Position[]
+}
+
+model ChangeRequestOwner {
+  changeRequest   ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  changeRequestId String
+  owner           BusinessOwner @relation(fields: [businessOwnerId], references: [id], onDelete: Cascade)
+  businessOwnerId String
+
+  @@id([changeRequestId, businessOwnerId])
+}
+
 model Position {
-  id            String       @id @default(cuid())
-  engagement    Engagement   @relation(fields: [engagementId], references: [id])
-  engagementId  String
-  title         String
+  id              String         @id @default(cuid())
+  changeRequest   ChangeRequest  @relation(fields: [changeRequestId], references: [id])
+  changeRequestId String
+  // The Boeing business owner this opening reports to.
+  owner           BusinessOwner? @relation(fields: [businessOwnerId], references: [id])
+  businessOwnerId String?
+  title           String
   // "US" | "India"
-  location      String
-  required      Int
-  filled        Int          @default(0)
+  location        String
+  required        Int
+  filled          Int            @default(0)
   // "open" | "on_hold" | "closed" (cancelled by the client). "Filled" is not
   // stored: it is derived when filled >= required (see openingState()).
-  status        String       @default("open")
+  status          String         @default("open")
   // Boeing-side reviewer / hiring manager for this role.
-  hiringManager String?
-  openedAt      DateTime     @default(now())
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  submissions   Submission[]
+  hiringManager   String?
+  openedAt        DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  submissions     Submission[]
 }
 
 // One resume sent to Boeing for one position. The same person can be
-// submitted to more than one position/engagement, so this is keyed by
+// submitted to more than one position/change request, so this is keyed by
 // submission, not by candidate.
 model Submission {
-  id              String    @id @default(cuid())
-  position        Position  @relation(fields: [positionId], references: [id])
+  id              String      @id @default(cuid())
+  position        Position    @relation(fields: [positionId], references: [id])
   positionId      String
   candidateName   String
   location        String
@@ -101,15 +125,15 @@ model Submission {
   // "submitted" | "screen_rejected" | "shortlisted" | "interview_scheduled"
   // | "awaiting_feedback" | "on_hold" | "interview_rejected" | "selected"
   // | "onboarded" | "withdrawn"
-  stage           String    @default("submitted")
+  stage           String      @default("submitted")
   screeningNotes  String?
   interviewer     String?
   interviewAt     DateTime?
   feedback        String?
   onboardingNotes String?
   resume          ResumeFile?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@index([positionId])
   @@index([stage])

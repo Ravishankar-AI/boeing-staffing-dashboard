@@ -19,12 +19,15 @@ waiting on.
 - `/`: KPIs (open positions, filled, resumes sent, in interview, waiting on
   Boeing, selected/onboarded), the hiring funnel, a "waiting on Boeing" queue
   with days waiting, a positions table, and recent activity. Filter by
-  engagement and US/India.
+  change request, business owner and US/India. Refreshes itself every minute.
 - `/submissions/[id]`: edit any field of a candidate, or delete one added by
   mistake (recruiters and admins; both are recorded in the activity log).
-- `/positions` (Openings): set each opening's status (Open, On hold, Closed)
-  and headcount. "Filled" is shown automatically once filled reaches
-  required. Only open openings count toward Open positions.
+- `/positions` (Openings): change requests and their business owners; add,
+  rename or (when empty) delete a CR. Each opening has a business owner,
+  status (Open, On hold, Closed) and headcount. Filled is the larger of the
+  number entered and the number of the opening's candidates marked
+  Onboarded, so onboarding someone updates it automatically; "Filled" shows
+  once that reaches required. Only open openings count toward Open positions.
 - `/submissions`: every resume sent, filterable by engagement, location,
   status, and name. Recruiters change status inline.
 - `/submissions/new`: add a candidate sent to Boeing, with their resume file
@@ -36,9 +39,12 @@ waiting on.
 
 ## Data model
 
-`Engagement` (one per workbook tab / Boeing POC) → `Position` (title,
-location, required, filled) → `Submission` (one resume sent to Boeing for
-one position). The workbook spread a candidate's state across four free-text
+`ChangeRequest` (e.g. CR04) ⇄ `BusinessOwner` (many-to-many through
+`ChangeRequestOwner`: a CR can have several owners and an owner several CRs)
+→ `Position` (one CR and one owner; title, location, required, filled,
+status) → `Submission` (one resume sent to Boeing for one position) →
+`ResumeFile`. Migration `20261009000000_change_requests` turned the earlier
+one-POC "engagements" into this, merging workbook tabs that shared a CR. The workbook spread a candidate's state across four free-text
 columns. Here it is a single `stage` (see `src/lib/stages.ts`), so every view
 counts the same way.
 

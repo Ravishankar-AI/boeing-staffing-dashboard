@@ -25,6 +25,11 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
   resume_download: { label: "Downloaded resume", glyph: "↓", tone: "text-info" },
   position_update: { label: "Updated opening", glyph: "✎", tone: "text-info" },
   position_create: { label: "Added opening", glyph: "+", tone: "text-good" },
+  cr_create: { label: "Added change request", glyph: "+", tone: "text-good" },
+  cr_update: { label: "Edited change request", glyph: "✎", tone: "text-info" },
+  cr_delete: { label: "Deleted change request", glyph: "✕", tone: "text-critical" },
+  owner_create: { label: "Added business owner", glyph: "+", tone: "text-good" },
+  // Entries recorded before engagements became change requests.
   engagement_create: { label: "Added engagement", glyph: "+", tone: "text-good" },
   engagement_update: { label: "Edited engagement", glyph: "✎", tone: "text-info" },
   engagement_delete: { label: "Deleted engagement", glyph: "✕", tone: "text-critical" },
@@ -32,7 +37,7 @@ const ACTIONS: Record<string, { label: string; glyph: string; tone: string }> = 
 
 const GROUPS: Record<string, string[]> = {
   all: [],
-  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create", "engagement_create", "engagement_update", "engagement_delete"],
+  pipeline: ["stage_change", "submission_create", "submission_update", "submission_delete", "resume_upload", "resume_remove", "position_update", "position_create", "cr_create", "cr_update", "cr_delete", "owner_create", "engagement_create", "engagement_update", "engagement_delete"],
   downloads: ["resume_download"],
   access: ["sign_in", "sign_out", "sign_in_failed"],
   accounts: ["register", "approve", "reject", "disable", "enable", "role_change"],

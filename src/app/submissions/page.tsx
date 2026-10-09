@@ -5,6 +5,7 @@ import { loadDashboard } from "@/lib/staffing";
 import { formatDate } from "@/lib/format";
 import { formatSize } from "@/lib/resumes";
 import { FilterBar } from "@/components/filter-bar";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { StagePill } from "@/components/stage-pill";
 import { StageSelect } from "@/components/stage-select";
 
@@ -18,7 +19,7 @@ const td = "border-b border-dashed border-line py-3 pr-4 align-top";
 export default async function SubmissionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ engagement?: string; location?: string; stage?: string; q?: string; deleted?: string; saved?: string }>;
+  searchParams: Promise<{ cr?: string; owner?: string; location?: string; stage?: string; q?: string; deleted?: string; saved?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
@@ -28,6 +29,7 @@ export default async function SubmissionsPage({
 
   return (
     <div className="mx-auto max-w-[1240px] px-4 py-10 sm:px-8">
+      <AutoRefresh />
       <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
         <div>
           <h1 className="text-[2rem] leading-tight">Candidates</h1>
@@ -62,14 +64,14 @@ export default async function SubmissionsPage({
         </p>
       )}
       <div className="mb-6">
-        <FilterBar action="/submissions" engagements={data.engagements} values={filters} withStage />
+        <FilterBar action="/submissions" crs={data.crs} owners={data.owners} values={filters} withStage />
       </div>
 
       <div className="overflow-x-auto rounded-md border border-line bg-card p-6">
         <table className="w-full min-w-[1200px] border-collapse text-[0.8rem]">
           <thead>
             <tr>
-              {["Candidate", "Resume", "Role", "Engagement", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status"].map((h) => (
+              {["Candidate", "Resume", "Role", "CR · owner", "Sent", "Interview", "Interviewer", "Screening / feedback", "Status"].map((h) => (
                 <th key={h} className={th}>
                   {h}
                 </th>
@@ -117,7 +119,10 @@ export default async function SubmissionsPage({
                   {s.positionTitle}
                   <div className="text-[0.7rem] text-ink-faint">{s.positionLocation}</div>
                 </td>
-                <td className={`${td} text-ink-soft`}>{s.engagementName}</td>
+                <td className={`${td} text-ink-soft`}>
+                  <span className="whitespace-nowrap">{s.crCode}</span>
+                  {s.ownerName && <div className="text-[0.7rem] text-ink-faint">{s.ownerName}</div>}
+                </td>
                 <td className={`${td} whitespace-nowrap tabular-nums text-ink-soft`}>{formatDate(s.sentAt)}</td>
                 <td className={`${td} whitespace-nowrap tabular-nums text-ink-soft`}>{formatDate(s.interviewAt)}</td>
                 <td className={`${td} text-ink-soft`}>{s.interviewer ?? "—"}</td>

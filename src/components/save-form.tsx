@@ -36,7 +36,7 @@ export function SaveForm({
     >
       {children}
       <span className="ml-auto flex items-center gap-2">
-        <span role="status" className="min-w-[4.5rem] text-right text-[0.72rem]">
+        <span role="status" className="min-w-[3.75rem] text-right text-[0.72rem]">
           {state === "saved" && (
             <>
               <span className="font-bold text-good" aria-hidden>

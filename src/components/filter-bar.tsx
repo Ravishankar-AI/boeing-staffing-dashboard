@@ -2,24 +2,36 @@ import { STAGES, STAGE_META } from "@/lib/stages";
 
 type Props = {
   action: string;
-  engagements: { code: string; name: string }[];
-  values: { engagement?: string; location?: string; stage?: string; q?: string };
+  crs: { code: string }[];
+  owners: { id: string; name: string }[];
+  values: { cr?: string; owner?: string; location?: string; stage?: string; q?: string };
   withStage?: boolean;
 };
 
 const selectClass =
   "rounded-md border border-line bg-card px-3 py-2 font-mono text-[0.78rem] text-ink focus:border-signal focus:outline-none";
 
-export function FilterBar({ action, engagements, values, withStage }: Props) {
+export function FilterBar({ action, crs, owners, values, withStage }: Props) {
   return (
     <form method="get" action={action} className="flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1 text-[0.64rem] uppercase tracking-wider text-ink-faint">
-        Engagement
-        <select name="engagement" defaultValue={values.engagement ?? ""} className={selectClass}>
-          <option value="">All engagements</option>
-          {engagements.map((e) => (
-            <option key={e.code} value={e.code}>
-              {e.name}
+        Change request
+        <select name="cr" defaultValue={values.cr ?? ""} className={selectClass}>
+          <option value="">All CRs</option>
+          {crs.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-[0.64rem] uppercase tracking-wider text-ink-faint">
+        Business owner
+        <select name="owner" defaultValue={values.owner ?? ""} className={selectClass}>
+          <option value="">All owners</option>
+          {owners.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
             </option>
           ))}
         </select>

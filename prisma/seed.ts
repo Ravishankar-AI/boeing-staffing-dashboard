@@ -155,7 +155,7 @@ async function main() {
   // fresh database once and never touches one that already has data, so
   // recruiters' updates survive redeploys. Without the flag this is a full
   // reset back to the workbook contents.
-  if (process.argv.includes("--if-empty") && (await prisma.engagement.count()) > 0) {
+  if (process.argv.includes("--if-empty") && (await prisma.changeRequest.count()) > 0) {
     console.log("Staffing data already present; skipping seed.");
     return;
   }
@@ -165,20 +165,43 @@ async function main() {
   await prisma.activityLog.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.position.deleteMany();
-  await prisma.engagement.deleteMany();
+  await prisma.changeRequestOwner.deleteMany();
+  await prisma.changeRequest.deleteMany();
+  await prisma.businessOwner.deleteMany();
   await prisma.user.deleteMany();
 
   await prisma.user.createMany({ data: USERS });
 
+  // Workbook tabs → change requests. Tabs that share a CR ("CR04 · Navneet",
+  // "CR04 · Lakshmi / Christos") become one CR04 with several business owners;
+  // each opening's owner is the tab's only POC, or the POC matching its
+  // reviewer. Same rules as the 20261009 migration applies to live data.
+  const crIds = new Map<string, string>();
+  const ownerIds = new Map<string, string>();
   for (const e of ENGAGEMENTS) {
-    const engagement = await prisma.engagement.create({
-      data: { code: e.code, name: e.name, boeingPoc: e.boeingPoc },
-    });
+    const crCode = e.name.split("·")[0].trim();
+    let crId = crIds.get(crCode);
+    if (!crId) {
+      crId = (await prisma.changeRequest.create({ data: { code: crCode } })).id;
+      crIds.set(crCode, crId);
+    }
+    const pocs = e.boeingPoc.split(/\s*(?:\/|,|&)\s*/).filter(Boolean);
+    for (const name of pocs) {
+      if (!ownerIds.has(name)) ownerIds.set(name, (await prisma.businessOwner.create({ data: { name } })).id);
+      await prisma.changeRequestOwner.upsert({
+        where: { changeRequestId_businessOwnerId: { changeRequestId: crId, businessOwnerId: ownerIds.get(name)! } },
+        create: { changeRequestId: crId, businessOwnerId: ownerIds.get(name)! },
+        update: {},
+      });
+    }
+    const ownerFor = (reviewer?: string) =>
+      pocs.length === 1 ? ownerIds.get(pocs[0]) : reviewer && pocs.includes(reviewer) ? ownerIds.get(reviewer) : undefined;
     const positionIds = new Map<string, string>();
     for (const p of e.positions) {
       const created = await prisma.position.create({
         data: {
-          engagementId: engagement.id,
+          changeRequestId: crId,
+          businessOwnerId: ownerFor(p.hiringManager),
           title: p.title,
           location: p.location,
           required: p.required,

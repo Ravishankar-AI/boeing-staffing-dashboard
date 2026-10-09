@@ -10,55 +10,66 @@ export * from "./stages";
  * is one `stage` per submission so every view counts the same way.
  */
 
-export type Filters = { engagement?: string; location?: string; stage?: string; q?: string };
+export type Filters = { cr?: string; owner?: string; location?: string; stage?: string; q?: string };
+
+/** Hires counted against an opening: whatever was entered on Openings, or the
+ * number of its candidates marked Onboarded if that's higher — so onboarding
+ * someone updates the count without a second manual edit. Capped at required. */
+export function effectiveFilled(p: { filled: number; required: number }, onboarded: number) {
+  return Math.min(p.required, Math.max(p.filled, onboarded));
+}
 
 export async function loadDashboard(filters: Filters = {}) {
-  const engagements = await prisma.engagement.findMany({
-    orderBy: { createdAt: "asc" },
-    include: {
-      positions: {
-        orderBy: [{ location: "desc" }, { title: "asc" }],
-        include: {
-          submissions: {
-            orderBy: { sentAt: "desc" },
-            // Metadata only — never load file bytes into list views.
-            include: { resume: { select: { filename: true, size: true } } },
+  const [crs, owners] = await Promise.all([
+    prisma.changeRequest.findMany({
+      orderBy: { createdAt: "asc" },
+      include: {
+        owners: { include: { owner: true } },
+        positions: {
+          include: {
+            owner: true,
+            submissions: {
+              orderBy: { sentAt: "desc" },
+              // Metadata only — never load file bytes into list views.
+              include: { resume: { select: { filename: true, size: true } } },
+            },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.businessOwner.findMany({ orderBy: { name: "asc" } }),
+  ]);
 
-  const scoped = engagements
-    .filter((e) => !filters.engagement || e.code === filters.engagement)
-    .map((e) => ({
-      ...e,
-      positions: e.positions.filter((p) => !filters.location || p.location === filters.location),
-    }));
-
-  const positions = scoped
-    .flatMap((e) =>
-      e.positions.map((p) => {
-        const state = openingState(p);
-        return { ...p, state, engagementName: e.name, engagementCode: e.code, boeingPoc: e.boeingPoc };
-      }),
+  const positions = crs
+    .filter((cr) => !filters.cr || cr.code === filters.cr)
+    .flatMap((cr) =>
+      cr.positions
+        .filter((p) => !filters.location || p.location === filters.location)
+        .filter((p) => !filters.owner || p.businessOwnerId === filters.owner)
+        .map((p) => {
+          const onboarded = p.submissions.filter((s) => s.stage === "onboarded").length;
+          const filled = effectiveFilled(p, onboarded);
+          const state = openingState({ ...p, filled });
+          return { ...p, filled, onboarded, state, crCode: cr.code, ownerName: p.owner?.name ?? null };
+        }),
     )
     // Open first (most headcount still needed on top), then on hold, filled, closed.
     .sort(
       (a, b) =>
         OPENING_META[a.state].order - OPENING_META[b.state].order ||
         b.required - b.filled - (a.required - a.filled) ||
-        a.engagementName.localeCompare(b.engagementName) ||
+        a.crCode.localeCompare(b.crCode) ||
         a.title.localeCompare(b.title),
     );
+
   const submissions = positions.flatMap((p) =>
     p.submissions.map((s) => ({
       ...s,
       stage: s.stage as Stage,
       positionTitle: p.title,
       positionLocation: p.location,
-      engagementName: p.engagementName,
-      engagementCode: p.engagementCode,
+      crCode: p.crCode,
+      ownerName: p.ownerName,
     })),
   );
 
@@ -67,7 +78,7 @@ export async function loadDashboard(filters: Filters = {}) {
   // actively hiring; on-hold headcount is reported separately.
   const live = positions.filter((p) => p.state !== "closed");
   const required = sum(live.map((p) => p.required));
-  const filled = sum(live.map((p) => Math.min(p.filled, p.required)));
+  const filled = sum(live.map((p) => p.filled));
   const openPositions = positions.filter((p) => p.state === "open");
   const onHoldPositions = positions.filter((p) => p.state === "on_hold");
   const stateCounts = { open: 0, on_hold: 0, filled: 0, closed: 0 };
@@ -109,7 +120,8 @@ export async function loadDashboard(filters: Filters = {}) {
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || b.sentAt.getTime() - a.sentAt.getTime());
 
   return {
-    engagements: engagements.map((e) => ({ code: e.code, name: e.name })),
+    crs: crs.map((cr) => ({ code: cr.code })),
+    owners: owners.map((o) => ({ id: o.id, name: o.name })),
     positions,
     submissions: filteredSubmissions,
     totals: {
@@ -133,24 +145,33 @@ export async function loadDashboard(filters: Filters = {}) {
   };
 }
 
-/** Positions for the Add/Edit candidate picker, grouped by engagement so the
- * same job title under two Boeing contacts can't be mistaken for a duplicate.
- * Open roles come first within each group. */
+/** Positions for the Add/Edit candidate picker, grouped by change request,
+ * each labelled with its business owner, open roles first. */
 export async function listPositionGroups() {
-  const engagements = await prisma.engagement.findMany({
+  const crs = await prisma.changeRequest.findMany({
     orderBy: { createdAt: "asc" },
-    include: { positions: true },
+    include: {
+      positions: {
+        include: { owner: true, _count: { select: { submissions: { where: { stage: "onboarded" } } } } },
+      },
+    },
   });
-  return engagements
-    .map((e) => ({
-      label: `${e.name} · POC ${e.boeingPoc}`,
-      options: e.positions
+  return crs
+    .map((cr) => ({
+      label: cr.code,
+      options: cr.positions
         .map((p) => {
-          const state = openingState(p);
-          const left = p.required - p.filled;
+          const filled = effectiveFilled(p, p._count.submissions);
+          const state = openingState({ ...p, filled });
+          const left = p.required - filled;
           const suffix =
             state === "open" ? `${left} open` : state === "on_hold" ? "on hold" : state === "filled" ? "filled" : "closed";
-          return { id: p.id, label: `${p.title} · ${p.location} — ${suffix}`, order: OPENING_META[state].order, title: p.title };
+          return {
+            id: p.id,
+            label: `${p.title} · ${p.location}${p.owner ? ` · ${p.owner.name}` : ""} — ${suffix}`,
+            order: OPENING_META[state].order,
+            title: p.title,
+          };
         })
         .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
     }))
